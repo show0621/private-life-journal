@@ -13,6 +13,17 @@ import { bindRichEditor, getRichContent, renderRichToolbar } from "./rich-editor
 import { clearVault, hasVault, loadVault, saveVault } from "./storage";
 import { scrollInputIntoView } from "./mobile";
 import {
+  formatReaderScale,
+  loadReaderPreferences,
+  saveReaderPreferences,
+  stepReaderScale,
+} from "./reader-prefs";
+import {
+  hidePrivacyShield,
+  showPrivacyShield,
+  togglePrivacyShield,
+} from "./privacy-shield";
+import {
   loadNotificationPref,
   requestNotificationPermission,
   saveNotificationPref,
@@ -119,6 +130,7 @@ function resetLockTimer(): void {
 
 function lock(): void {
   stopReminderLoop();
+  hidePrivacyShield();
   state.unlocked = false;
   state.password = "";
   state.salt = undefined;
@@ -559,6 +571,7 @@ function renderAppHeader(options?: { showHiddenToggle?: boolean }): string {
       ${renderBrand(true)}
       <div class="header-actions">
         ${showHiddenToggle ? `<button class="icon-btn ${state.showHidden ? "active" : ""}" id="btn-hidden" title="顯示隱藏項目">🙈</button>` : ""}
+        <button class="icon-btn" id="btn-privacy" title="立即隱藏內容">👁‍🗨</button>
         <button class="icon-btn mobile-hide" id="btn-theme" title="切換主題">${getResolvedTheme() === "light" ? "🌙" : "☀️"}</button>
         <button class="icon-btn" id="btn-settings" title="設定">⚙️</button>
         <button class="icon-btn" id="btn-lock" title="上鎖">🔒</button>
@@ -816,12 +829,23 @@ function renderEntryView(entry: Entry): string {
   const tags = (entry.tags ?? [])
     .map((tag) => `<span class="entry-tag">#${escapeHtml(tag)}</span>`)
     .join("");
+  const readScale = loadReaderPreferences().fontScale;
 
   return `
     <div class="entry-view-screen">
-      <div class="entry-view-top">
+      <div class="entry-view-top entry-view-top-actions">
         <button class="btn btn-secondary btn-touch" type="button" id="btn-view-back">← 返回</button>
+        <button class="btn btn-secondary btn-touch" type="button" id="btn-view-shield">遮罩</button>
         <button class="btn btn-primary btn-touch" type="button" id="btn-view-edit">編輯</button>
+      </div>
+
+      <div class="read-controls line-card">
+        <span class="read-controls-label">閱讀字級</span>
+        <div class="read-controls-buttons">
+          <button type="button" class="read-size-btn" id="btn-read-smaller" aria-label="縮小字級">A−</button>
+          <span class="read-scale-label" id="read-scale-label">${formatReaderScale(readScale)}</span>
+          <button type="button" class="read-size-btn" id="btn-read-larger" aria-label="放大字級">A＋</button>
+        </div>
       </div>
 
       <article class="line-card entry-view">
@@ -965,6 +989,18 @@ function renderSettings(): string {
       </header>
 
       <div class="entry-list">
+        <section class="entry-card">
+          <h3>閱讀與隱私</h3>
+          <p>閱讀時可用 A− / A＋ 調整字級。遮罩會立刻隱藏畫面內容，避免旁人看到。</p>
+          <label class="inline-check" style="margin-top:12px;">
+            <input type="checkbox" id="auto-privacy-shield" ${loadReaderPreferences().autoPrivacyShield ? "checked" : ""} />
+            離開 App 或切換畫面時自動遮罩
+          </label>
+          <button class="btn btn-secondary btn-block btn-touch" type="button" id="btn-test-shield" style="margin-top:12px;">
+            測試內容遮罩
+          </button>
+        </section>
+
         <section class="entry-card ios-tip">
           <h3>iPhone 使用建議</h3>
           <p>在 Safari 點「分享」→「加入主畫面」，可像 App 一樣全螢幕使用，書寫與設定會更方便。</p>
@@ -1153,6 +1189,12 @@ function openNew(type: EntryType = "diary"): void {
 }
 
 function bindEntryViewEvents(entry: Entry): void {
+  document.getElementById("btn-view-shield")!.addEventListener("click", () => {
+    touchActivity();
+    showPrivacyShield();
+    showToast("內容已遮罩");
+  });
+
   document.getElementById("btn-view-back")!.addEventListener("click", () => {
     touchActivity();
     closeEntry();
@@ -1160,6 +1202,31 @@ function bindEntryViewEvents(entry: Entry): void {
 
   document.getElementById("btn-view-edit")!.addEventListener("click", () => {
     openEntryEditor(entry.id);
+  });
+
+  const updateScaleLabel = (): void => {
+    const label = document.getElementById("read-scale-label");
+    if (label) label.textContent = formatReaderScale(loadReaderPreferences().fontScale);
+  };
+
+  document.getElementById("btn-read-smaller")!.addEventListener("click", () => {
+    touchActivity();
+    stepReaderScale(-1);
+    updateScaleLabel();
+  });
+
+  document.getElementById("btn-read-larger")!.addEventListener("click", () => {
+    touchActivity();
+    stepReaderScale(1);
+    updateScaleLabel();
+  });
+}
+
+function bindPrivacyButton(): void {
+  document.getElementById("btn-privacy")?.addEventListener("click", () => {
+    touchActivity();
+    const visible = togglePrivacyShield();
+    showToast(visible ? "內容已遮罩" : "已恢復顯示");
   });
 }
 
@@ -1221,6 +1288,7 @@ function cycleTheme(): void {
 
 function bindSharedChrome(): void {
   document.getElementById("btn-lock")?.addEventListener("click", lock);
+  bindPrivacyButton();
   document.getElementById("btn-hidden")?.addEventListener("click", () => {
     touchActivity();
     state.showHidden = !state.showHidden;
@@ -1513,6 +1581,19 @@ function bindSettingsEvents(): void {
     render();
   });
 
+  document.getElementById("auto-privacy-shield")!.addEventListener("change", () => {
+    touchActivity();
+    const prefs = loadReaderPreferences();
+    prefs.autoPrivacyShield = (document.getElementById("auto-privacy-shield") as HTMLInputElement).checked;
+    saveReaderPreferences(prefs);
+    showToast("隱私設定已儲存");
+  });
+
+  document.getElementById("btn-test-shield")!.addEventListener("click", () => {
+    touchActivity();
+    showPrivacyShield();
+  });
+
   document.getElementById("notify-enabled")!.addEventListener("change", async () => {
     touchActivity();
     const enabled = (document.getElementById("notify-enabled") as HTMLInputElement).checked;
@@ -1699,7 +1780,10 @@ function escapeHtml(text: string): string {
 });
 
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden && state.unlocked) lock();
+  if (!state.unlocked || !document.hidden) return;
+  if (loadReaderPreferences().autoPrivacyShield) {
+    showPrivacyShield();
+  }
 });
 
 render();

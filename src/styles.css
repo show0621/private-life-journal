@@ -97,6 +97,7 @@
 :root {
   --radius: 10px;
   --radius-sm: 6px;
+  --read-scale: 0.88;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
@@ -951,6 +952,52 @@ body::after {
 
 .entry-view-top .btn { flex: 1; }
 
+.entry-view-top-actions {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 8px;
+}
+
+.entry-view-top-actions #btn-view-edit { justify-self: end; }
+
+.read-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+}
+
+.read-controls-label {
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.read-controls-buttons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.read-size-btn {
+  min-width: var(--touch);
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-soft);
+  color: var(--text);
+  font-size: 0.92rem;
+}
+
+.read-scale-label {
+  min-width: 44px;
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
 .entry-view {
   padding: 20px 18px;
 }
@@ -968,7 +1015,7 @@ body::after {
 .entry-view-title {
   margin: 0 0 10px;
   font-family: var(--font-serif);
-  font-size: 1.55rem;
+  font-size: calc(1.28rem * var(--read-scale));
   font-weight: 600;
   line-height: 1.45;
 }
@@ -985,12 +1032,49 @@ body::after {
 .entry-readonly {
   min-height: auto;
   padding: 0;
+  font-size: calc(0.94rem * var(--read-scale));
+  line-height: 1.8;
   user-select: text;
   -webkit-user-select: text;
   pointer-events: auto;
 }
 
-.entry-readonly:focus { outline: none; }
+.privacy-shield {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--bg-gradient), var(--bg);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+.privacy-shield-panel {
+  text-align: center;
+  padding: 28px 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  max-width: 320px;
+  width: 100%;
+}
+
+.privacy-shield-hint {
+  margin: 12px 0 6px;
+  color: var(--text-muted);
+  font-size: 0.92rem;
+}
+
+.privacy-shield-action {
+  margin: 0;
+  color: var(--accent-strong);
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+}
 
 .editor-toolbar {
   display: flex;
