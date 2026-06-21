@@ -13,9 +13,9 @@ const COMMANDS: Array<{ cmd: string; label: string; title: string; value?: strin
 
 export const FONT_OPTIONS = [
   { label: "預設", value: "" },
-  { label: "襯線", value: '"Noto Serif TC", "Songti TC", serif' },
-  { label: "圓潤", value: '"Segoe UI", "PingFang TC", sans-serif' },
-  { label: "手寫", value: '"Segoe Script", "KaiTi", cursive' },
+  { label: "明朝", value: '"Noto Serif JP", "Noto Serif TC", "Yu Mincho", serif' },
+  { label: "ゴシック", value: '"Noto Sans JP", "Segoe UI", "PingFang TC", sans-serif' },
+  { label: "手書", value: '"Segoe Script", "KaiTi", cursive' },
 ];
 
 export const SIZE_OPTIONS = [
@@ -27,12 +27,12 @@ export const SIZE_OPTIONS = [
 
 export const COLOR_OPTIONS = [
   { label: "預設", value: "" },
-  { label: "墨", value: "#2c2825" },
-  { label: "褐", value: "#6b5344" },
-  { label: "綠", value: "#5c6b4f" },
-  { label: "藍", value: "#4a6670" },
-  { label: "赭", value: "#a66b4a" },
-  { label: "灰", value: "#8a8278" },
+  { label: "藍", value: "#3d7399" },
+  { label: "空", value: "#5a94c4" },
+  { label: "墨", value: "#2a3d52" },
+  { label: "松", value: "#5a9a8a" },
+  { label: "陽", value: "#c4924a" },
+  { label: "灰", value: "#6b8499" },
 ];
 
 export function renderRichToolbar(): string {

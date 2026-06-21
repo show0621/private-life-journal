@@ -13,7 +13,7 @@ import { bindRichEditor, getRichContent, renderRichToolbar } from "./rich-editor
 import { clearVault, hasVault, loadVault, saveVault } from "./storage";
 import { pullFromCloud, pushToCloud, testCloudConnection } from "./sync";
 import { getResolvedTheme, getStoredTheme, setStoredTheme } from "./theme";
-import type { BackupFile, Entry, EntryPrivacy, EntryType, SyncSettings, ThemeMode } from "./types";
+import type { BackupFile, Entry, EntryType, SyncSettings, ThemeMode } from "./types";
 import { ENTRY_TYPE_LABELS, MOOD_OPTIONS } from "./types";
 import {
   debounce,
@@ -87,8 +87,16 @@ function lock(): void {
   render();
 }
 
+function isEntryHidden(entry: Entry): boolean {
+  return !!entry.hidden;
+}
+
+function isEntryLocked(entry: Entry): boolean {
+  return !!entry.locked && !!entry.lockHash;
+}
+
 function isEntryAccessible(entry: Entry): boolean {
-  if (entry.privacy !== "locked" || !entry.lockHash) return true;
+  if (!isEntryLocked(entry)) return true;
   return state.unlockedEntryIds.has(entry.id);
 }
 
@@ -147,7 +155,7 @@ function sortedEntries(): Entry[] {
 function filteredEntries(): Entry[] {
   const q = state.search.trim().toLowerCase();
   return sortedEntries().filter((entry) => {
-    if (entry.privacy === "hidden" && !state.showHidden) return false;
+    if (isEntryHidden(entry) && !state.showHidden) return false;
     if (state.filter !== "all" && entry.type !== state.filter) return false;
     if (state.tagFilter && !(entry.tags ?? []).includes(state.tagFilter)) return false;
     if (!q) return true;
@@ -182,7 +190,7 @@ function renderBrand(compact = false): string {
   return `
     <div class="brand">
       <p class="brand-mark">The Hideaway</p>
-      <p class="brand-tagline">${compact ? "journal" : "A quiet place for your words"}</p>
+      <p class="brand-tagline">${compact ? "日記" : "光と風に、言葉を残す"}</p>
     </div>
   `;
 }
@@ -194,8 +202,8 @@ function badgeClass(type: EntryType): string {
 }
 
 function renderEntryCard(entry: Entry): string {
-  const isLocked = entry.privacy === "locked" && !!entry.lockHash;
-  const isHidden = entry.privacy === "hidden";
+  const isLocked = isEntryLocked(entry);
+  const isHidden = isEntryHidden(entry);
   const cardClass = [
     "entry-card",
     isHidden ? "is-hidden" : "",
@@ -528,17 +536,19 @@ function renderEditor(entry: Entry): string {
         </div>
 
         <div class="privacy-row">
-          <div class="field" style="margin:0">
-            <label for="entry-privacy">隱私</label>
-            <select id="entry-privacy">
-              <option value="normal" ${(entry.privacy ?? "normal") === "normal" ? "selected" : ""}>一般</option>
-              <option value="hidden" ${entry.privacy === "hidden" ? "selected" : ""}>隱藏</option>
-              <option value="locked" ${entry.privacy === "locked" ? "selected" : ""}>上鎖</option>
-            </select>
+          <div class="privacy-toggles">
+            <label class="privacy-toggle">
+              <input type="checkbox" id="entry-hidden" ${entry.hidden ? "checked" : ""} />
+              隱藏（不在清單顯示）
+            </label>
+            <label class="privacy-toggle">
+              <input type="checkbox" id="entry-locked" ${entry.locked ? "checked" : ""} />
+              上鎖（需 PIN 才能查看）
+            </label>
           </div>
-          <div class="field" style="margin:0">
-            <label for="entry-pin-set">${entry.lockHash ? "變更 PIN" : "設定 PIN（上鎖時）"}</label>
-            <input id="entry-pin-set" type="password" inputmode="numeric" autocomplete="new-password" placeholder="${entry.privacy === "locked" ? "至少 4 碼" : "選上鎖時填寫"}" />
+          <div class="field entry-pin-field" id="entry-pin-field" style="margin:0;${entry.locked ? "" : "display:none"}">
+            <label for="entry-pin-set">${entry.lockHash ? "變更 PIN" : "設定 PIN"}</label>
+            <input id="entry-pin-set" type="password" inputmode="numeric" autocomplete="new-password" placeholder="至少 4 碼" />
           </div>
         </div>
 
@@ -724,7 +734,7 @@ function openEditor(id: string): void {
   const entry = getEntry(id);
   if (!entry) return;
   state.editingId = id;
-  if (entry.privacy === "locked" && entry.lockHash && !isEntryAccessible(entry)) {
+  if (isEntryLocked(entry) && !isEntryAccessible(entry)) {
     state.view = "entry-unlock";
   } else {
     state.view = "editor";
@@ -869,11 +879,18 @@ function bindEditorEvents(entry: Entry): void {
     render();
   });
 
+  document.getElementById("entry-locked")!.addEventListener("change", () => {
+    const locked = (document.getElementById("entry-locked") as HTMLInputElement).checked;
+    const pinField = document.getElementById("entry-pin-field")!;
+    pinField.style.display = locked ? "" : "none";
+  });
+
   document.getElementById("editor-form")!.addEventListener("submit", async (e) => {
     e.preventDefault();
     touchActivity();
     const rich = getRichContent(editor);
-    const privacy = (document.getElementById("entry-privacy") as HTMLSelectElement).value as EntryPrivacy;
+    const hidden = (document.getElementById("entry-hidden") as HTMLInputElement).checked;
+    const locked = (document.getElementById("entry-locked") as HTMLInputElement).checked;
     const pinInput = (document.getElementById("entry-pin-set") as HTMLInputElement).value;
 
     entry.title = (document.getElementById("entry-title") as HTMLInputElement).value.trim();
@@ -881,10 +898,12 @@ function bindEditorEvents(entry: Entry): void {
     entry.format = rich.format;
     entry.tags = parseTags((document.getElementById("entry-tags") as HTMLInputElement).value);
     entry.pinned = (document.getElementById("entry-pinned") as HTMLInputElement).checked;
-    entry.privacy = privacy;
+    entry.hidden = hidden;
+    entry.locked = locked;
+    delete entry.privacy;
     entry.updatedAt = Date.now();
 
-    if (privacy === "locked") {
+    if (locked) {
       if (pinInput) {
         if (pinInput.length < 4) {
           showToast("PIN 至少需要 4 碼");

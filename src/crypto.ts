@@ -77,10 +77,19 @@ async function decryptJson<T>(
 }
 
 function normalizeEntry(entry: Entry): Entry {
+  let hidden = entry.hidden ?? false;
+  let locked = entry.locked ?? false;
+
+  if (entry.privacy === "hidden") hidden = true;
+  if (entry.privacy === "locked") locked = true;
+
+  const { privacy: _legacyPrivacy, ...rest } = entry;
+
   return {
-    ...entry,
+    ...rest,
     tags: entry.tags ?? [],
-    privacy: entry.privacy ?? "normal",
+    hidden,
+    locked,
     format: entry.format ?? (/<[^>]+>/.test(entry.content) ? "html" : "text"),
   };
 }

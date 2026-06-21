@@ -1,6 +1,7 @@
 export type EntryType = "diary" | "note" | "quick";
 export type ContentFormat = "text" | "html";
 export type ThemeMode = "dark" | "light" | "system";
+/** @deprecated Legacy single-choice privacy; migrated to hidden/locked flags on load */
 export type EntryPrivacy = "normal" | "hidden" | "locked";
 
 export interface Entry {
@@ -11,7 +12,10 @@ export interface Entry {
   format?: ContentFormat;
   tags?: string[];
   mood?: string;
+  /** @deprecated Use hidden/locked instead */
   privacy?: EntryPrivacy;
+  hidden?: boolean;
+  locked?: boolean;
   lockHash?: string;
   createdAt: number;
   updatedAt: number;

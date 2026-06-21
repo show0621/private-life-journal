@@ -12,8 +12,9 @@ export async function verifyEntryPin(
   return (await hashEntryPin(entryId, pin)) === lockHash;
 }
 
-export function privacyLabel(privacy?: string): string {
-  if (privacy === "hidden") return "隱藏";
-  if (privacy === "locked") return "上鎖";
-  return "一般";
+export function privacyLabel(entry: { hidden?: boolean; locked?: boolean }): string {
+  const parts: string[] = [];
+  if (entry.hidden) parts.push("隱藏");
+  if (entry.locked) parts.push("上鎖");
+  return parts.length ? parts.join(" · ") : "一般";
 }

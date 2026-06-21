@@ -22,7 +22,7 @@ export function applyTheme(mode: ThemeMode): "light" | "dark" {
   const resolved = resolveTheme(mode);
   document.documentElement.dataset.theme = resolved;
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute("content", resolved === "light" ? "#ebe6dc" : "#151310");
+  if (meta) meta.setAttribute("content", resolved === "light" ? "#e8f4fc" : "#0f1822");
   return resolved;
 }
 
