@@ -63,6 +63,11 @@ import {
 } from "./utils";
 
 const AUTO_LOCK_MS = 5 * 60 * 1000;
+/** iOS PWA often opens a numeric keyboard on password fields unless inputmode=text is set. */
+const IOS_PASSWORD_INPUT =
+  'type="password" inputmode="text" autocapitalize="off" autocorrect="off" spellcheck="false"';
+const IOS_MASKED_INPUT =
+  'type="text" class="masked-input" inputmode="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"';
 
 type MainView = "journal" | "calendar" | "todos";
 type View = MainView | "entry-view" | "editor" | "settings" | "entry-unlock";
@@ -512,11 +517,11 @@ function renderSetupForm(): string {
     <form id="setup-form">
       <div class="field">
         <label for="setup-password">密碼</label>
-        <input id="setup-password" type="password" autocomplete="new-password" minlength="6" required placeholder="至少 6 個字元" enterkeyhint="next" />
+        <input id="setup-password" ${IOS_PASSWORD_INPUT} autocomplete="new-password" minlength="6" required placeholder="至少 6 個字元" enterkeyhint="next" />
       </div>
       <div class="field">
         <label for="setup-confirm">確認密碼</label>
-        <input id="setup-confirm" type="password" autocomplete="new-password" minlength="6" required placeholder="再輸入一次" enterkeyhint="done" />
+        <input id="setup-confirm" ${IOS_PASSWORD_INPUT} autocomplete="new-password" minlength="6" required placeholder="再輸入一次" enterkeyhint="done" />
       </div>
       <p class="error-text" id="auth-error"></p>
       <button class="btn btn-primary btn-block" type="submit">開始使用</button>
@@ -538,11 +543,11 @@ function renderRestoreForm(): string {
     <form id="restore-form">
       <div class="field">
         <label for="restore-password">解鎖密碼</label>
-        <input id="restore-password" type="password" autocomplete="current-password" required placeholder="與電腦相同" enterkeyhint="next" />
+        <input id="restore-password" ${IOS_PASSWORD_INPUT} autocomplete="current-password" required placeholder="與電腦相同（可含英文）" enterkeyhint="next" />
       </div>
       <div class="field">
         <label for="restore-sync-key">同步金鑰</label>
-        <input id="restore-sync-key" type="password" autocomplete="new-password" required placeholder="與電腦設定相同" enterkeyhint="next" />
+        <input id="restore-sync-key" ${IOS_MASKED_INPUT} required placeholder="與電腦設定相同（可含英文）" enterkeyhint="next" />
       </div>
       <div class="field">
         <label for="restore-api-url">同步 API 網址</label>
@@ -572,7 +577,7 @@ function renderUnlockForm(): string {
     <form id="unlock-form">
       <div class="field">
         <label for="unlock-password">密碼</label>
-        <input id="unlock-password" type="password" autocomplete="current-password" required placeholder="輸入密碼" enterkeyhint="go" />
+        <input id="unlock-password" ${IOS_PASSWORD_INPUT} autocomplete="current-password" required placeholder="輸入密碼（可含英文）" enterkeyhint="go" />
       </div>
       <p class="error-text" id="auth-error"></p>
       <button class="btn btn-primary btn-block" type="submit">解鎖</button>
@@ -1207,7 +1212,7 @@ function renderSettings(): string {
             </div>
             <div class="field">
               <label for="sync-key">同步金鑰</label>
-              <input id="sync-key" type="password" autocomplete="new-password" placeholder="自訂一組同步用金鑰" value="${escapeHtml(sync.syncKey)}" />
+              <input id="sync-key" ${IOS_MASKED_INPUT} placeholder="自訂一組同步用金鑰（可含英文）" value="${escapeHtml(sync.syncKey)}" />
             </div>
             <label style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
               <input type="checkbox" id="sync-remember" ${sync.rememberSyncKey ? "checked" : ""} />
@@ -1245,15 +1250,15 @@ function renderSettings(): string {
           <form id="change-password-form" style="margin-top:12px;">
             <div class="field">
               <label for="old-password">目前密碼</label>
-              <input id="old-password" type="password" autocomplete="current-password" required />
+              <input id="old-password" ${IOS_PASSWORD_INPUT} autocomplete="current-password" required />
             </div>
             <div class="field">
               <label for="new-password">新密碼</label>
-              <input id="new-password" type="password" autocomplete="new-password" minlength="6" required />
+              <input id="new-password" ${IOS_PASSWORD_INPUT} autocomplete="new-password" minlength="6" required />
             </div>
             <div class="field">
               <label for="new-password-confirm">確認新密碼</label>
-              <input id="new-password-confirm" type="password" autocomplete="new-password" minlength="6" required />
+              <input id="new-password-confirm" ${IOS_PASSWORD_INPUT} autocomplete="new-password" minlength="6" required />
             </div>
             <p class="error-text" id="settings-error"></p>
             <button class="btn btn-primary" type="submit">更新密碼</button>

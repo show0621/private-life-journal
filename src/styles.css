@@ -430,6 +430,12 @@ body::after {
   border-bottom-color: var(--accent-strong);
 }
 
+.masked-input {
+  -webkit-text-security: disc;
+  text-security: disc;
+  font-family: var(--font-sans);
+}
+
 .btn {
   border: 1px solid var(--glass-border);
   border-radius: 999px;
