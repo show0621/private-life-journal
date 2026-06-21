@@ -49,6 +49,13 @@ export async function readJsonFile<T>(file: File): Promise<T> {
   return JSON.parse(text) as T;
 }
 
+export function formatDateShort(key: string): string {
+  return new Intl.DateTimeFormat("zh-TW", {
+    month: "numeric",
+    day: "numeric",
+  }).format(new Date(key.replace(/-/g, "/")));
+}
+
 export function debounce<T extends (...args: never[]) => void>(fn: T, ms: number): T {
   let timer: ReturnType<typeof setTimeout> | undefined;
   return ((...args: Parameters<T>) => {

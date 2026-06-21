@@ -11,13 +11,35 @@ import { truncateContent } from "./html";
 import { loadSyncSettings, saveSyncSettings } from "./preferences";
 import { bindRichEditor, getRichContent, renderRichToolbar } from "./rich-editor";
 import { clearVault, hasVault, loadVault, saveVault } from "./storage";
+import {
+  loadNotificationPref,
+  requestNotificationPermission,
+  saveNotificationPref,
+  startReminderLoop,
+  stopReminderLoop,
+} from "./notifications";
+import {
+  countForDate,
+  eventsOnDate,
+  formatDayLabel,
+  formatMonthLabel,
+  formatTimeLabel,
+  getMonthGrid,
+  getTodayReminders,
+  shiftMonth,
+  sortedTodos,
+  todayKey,
+  todosOnDate,
+  WEEKDAY_LABELS,
+} from "./planner";
 import { pullFromCloud, pushToCloud, testCloudConnection } from "./sync";
 import { getResolvedTheme, getStoredTheme, setStoredTheme } from "./theme";
-import type { BackupFile, Entry, EntryType, SyncSettings, ThemeMode } from "./types";
+import type { BackupFile, CalendarEvent, Entry, EntryType, SyncSettings, ThemeMode, TodoItem, VaultData } from "./types";
 import { ENTRY_TYPE_LABELS, MOOD_OPTIONS } from "./types";
 import {
   debounce,
   downloadJson,
+  formatDateShort,
   formatDateTime,
   readJsonFile,
   todayTitle,
@@ -26,7 +48,7 @@ import {
 
 const AUTO_LOCK_MS = 5 * 60 * 1000;
 
-type View = "list" | "editor" | "settings" | "entry-unlock";
+type View = "journal" | "calendar" | "todos" | "editor" | "settings" | "entry-unlock";
 
 interface AppState {
   unlocked: boolean;
@@ -34,6 +56,8 @@ interface AppState {
   salt?: ArrayBuffer;
   vaultUpdatedAt: number;
   entries: Entry[];
+  todos: TodoItem[];
+  events: CalendarEvent[];
   filter: EntryType | "all";
   tagFilter: string | null;
   search: string;
@@ -43,22 +67,33 @@ interface AppState {
   editingId: string | null;
   syncSettings: SyncSettings;
   lastActivity: number;
+  calendarYear: number;
+  calendarMonth: number;
+  selectedDate: string;
+  todoFilter: "all" | "active" | "done";
 }
 
+const now = new Date();
 const state: AppState = {
   unlocked: false,
   password: "",
   vaultUpdatedAt: Date.now(),
   entries: [],
+  todos: [],
+  events: [],
   filter: "all",
   tagFilter: null,
   search: "",
   showHidden: false,
   unlockedEntryIds: new Set(),
-  view: "list",
+  view: "journal",
   editingId: null,
   syncSettings: loadSyncSettings(),
   lastActivity: Date.now(),
+  calendarYear: now.getFullYear(),
+  calendarMonth: now.getMonth(),
+  selectedDate: todayKey(),
+  todoFilter: "active",
 };
 
 const root = document.getElementById("app")!;
@@ -77,14 +112,46 @@ function resetLockTimer(): void {
 }
 
 function lock(): void {
+  stopReminderLoop();
   state.unlocked = false;
   state.password = "";
   state.salt = undefined;
   state.entries = [];
-  state.view = "list";
+  state.todos = [];
+  state.events = [];
+  state.view = "journal";
   state.editingId = null;
   state.unlockedEntryIds.clear();
   render();
+}
+
+function vaultData(): VaultData {
+  return { entries: state.entries, todos: state.todos, events: state.events };
+}
+
+function loadVaultIntoState(data: VaultData & { salt: ArrayBuffer; updatedAt: number }): void {
+  state.entries = data.entries;
+  state.todos = data.todos;
+  state.events = data.events;
+  state.salt = data.salt;
+  state.vaultUpdatedAt = data.updatedAt;
+}
+
+function beginReminderLoop(): void {
+  startReminderLoop(
+    () => ({ todos: state.todos, events: state.events }),
+    (kind, id) => {
+      const ts = Date.now();
+      if (kind === "todo") {
+        const todo = state.todos.find((t) => t.id === id);
+        if (todo) todo.notifiedAt = ts;
+      } else {
+        const event = state.events.find((e) => e.id === id);
+        if (event) event.notifiedAt = ts;
+      }
+      schedulePersist();
+    }
+  );
 }
 
 function isEntryHidden(entry: Entry): boolean {
@@ -105,7 +172,7 @@ async function persist(): Promise<void> {
   state.vaultUpdatedAt = Date.now();
   const buffer = await encryptVault(
     state.password,
-    state.entries,
+    vaultData(),
     state.salt,
     state.vaultUpdatedAt
   );
@@ -183,6 +250,30 @@ function upsertEntry(entry: Entry): void {
 
 function deleteEntry(id: string): void {
   state.entries = state.entries.filter((e) => e.id !== id);
+  schedulePersist();
+}
+
+function upsertTodo(todo: TodoItem): void {
+  const idx = state.todos.findIndex((t) => t.id === todo.id);
+  if (idx >= 0) state.todos[idx] = todo;
+  else state.todos.unshift(todo);
+  schedulePersist();
+}
+
+function deleteTodo(id: string): void {
+  state.todos = state.todos.filter((t) => t.id !== id);
+  schedulePersist();
+}
+
+function upsertEvent(event: CalendarEvent): void {
+  const idx = state.events.findIndex((e) => e.id === event.id);
+  if (idx >= 0) state.events[idx] = event;
+  else state.events.unshift(event);
+  schedulePersist();
+}
+
+function deleteEvent(id: string): void {
+  state.events = state.events.filter((e) => e.id !== id);
   schedulePersist();
 }
 
@@ -270,17 +361,15 @@ async function runCloudSync(manual: boolean): Promise<void> {
         !manual ||
         confirm("雲端有較新的備份，是否下載並覆蓋本機？（取消則改為上傳本機）");
       if (shouldPull) {
-        const { entries, salt, updatedAt } = await decryptVault(state.password, remote.buffer);
-        state.entries = entries;
-        state.salt = salt;
-        state.vaultUpdatedAt = updatedAt;
+        const { entries, todos, events, salt, updatedAt } = await decryptVault(state.password, remote.buffer);
+        loadVaultIntoState({ entries, todos, events, salt, updatedAt });
         await saveVault(remote.buffer);
         settings.lastSyncAt = Date.now();
         settings.lastSyncStatus = "ok";
         saveSyncSettings(settings);
         state.syncSettings = loadSyncSettings();
         if (manual) showToast("已從雲端同步");
-        if (state.view === "list") render();
+        if (state.view === "journal" || state.view === "calendar" || state.view === "todos") render();
         return;
       }
     }
@@ -370,13 +459,12 @@ function bindAuthEvents(exists: boolean): void {
         return;
       }
       try {
-        const { entries, salt, updatedAt } = await decryptVault(password, buffer);
+        const { entries, todos, events, salt, updatedAt } = await decryptVault(password, buffer);
         state.unlocked = true;
         state.password = password;
-        state.salt = salt;
-        state.entries = entries;
-        state.vaultUpdatedAt = updatedAt;
+        loadVaultIntoState({ entries, todos, events, salt, updatedAt });
         touchActivity();
+        beginReminderLoop();
         render();
         if (state.syncSettings.enabled) void runCloudSync(false);
       } catch {
@@ -400,20 +488,94 @@ function bindAuthEvents(exists: boolean): void {
       return;
     }
     state.entries = [];
+    state.todos = [];
+    state.events = [];
     state.vaultUpdatedAt = Date.now();
-    const buffer = await encryptVault(password, state.entries, undefined, state.vaultUpdatedAt);
+    const buffer = await encryptVault(password, vaultData(), undefined, state.vaultUpdatedAt);
     await saveVault(buffer);
-    const { salt, updatedAt } = await decryptVault(password, buffer);
+    const data = await decryptVault(password, buffer);
     state.unlocked = true;
     state.password = password;
-    state.salt = salt;
-    state.vaultUpdatedAt = updatedAt;
+    loadVaultIntoState(data);
     touchActivity();
+    beginReminderLoop();
     render();
   });
 }
 
-function renderList(): string {
+function renderAppHeader(): string {
+  return `
+    <header class="app-header">
+      ${renderBrand(true)}
+      <div class="header-actions">
+        <button class="icon-btn ${state.showHidden ? "active" : ""}" id="btn-hidden" title="顯示隱藏項目">🙈</button>
+        <button class="icon-btn" id="btn-theme" title="切換主題">${getResolvedTheme() === "light" ? "🌙" : "☀️"}</button>
+        <button class="icon-btn" id="btn-settings" title="設定">⚙️</button>
+        <button class="icon-btn" id="btn-lock" title="上鎖">🔒</button>
+      </div>
+    </header>
+  `;
+}
+
+function renderBottomNav(active: "journal" | "calendar" | "todos"): string {
+  const items = [
+    { id: "journal", label: "日記" },
+    { id: "calendar", label: "行事曆" },
+    { id: "todos", label: "待辦" },
+  ] as const;
+  return `
+    <nav class="bottom-nav">
+      ${items
+        .map(
+          (item) => `
+        <button class="nav-item ${active === item.id ? "active" : ""}" data-nav="${item.id}" type="button">
+          ${item.label}
+        </button>
+      `
+        )
+        .join("")}
+    </nav>
+  `;
+}
+
+function renderTodayPanel(): string {
+  const items = getTodayReminders(state.todos, state.events);
+  if (!items.length) {
+    return `
+      <section class="line-card today-panel">
+        <div class="section-head">
+          <h3>今日</h3>
+          <span class="section-note">${formatDayLabel(todayKey())}</span>
+        </div>
+        <p class="muted-copy">今天沒有行程或待辦，好好放鬆一下。</p>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="line-card today-panel">
+      <div class="section-head">
+        <h3>今日提醒</h3>
+        <span class="section-note">${formatDayLabel(todayKey())}</span>
+      </div>
+      <ul class="reminder-list">
+        ${items
+          .map(
+            (item) => `
+          <li class="reminder-item">
+            <span class="reminder-kind">${item.kind === "event" ? "行程" : "待辦"}</span>
+            <span class="reminder-time">${formatTimeLabel(item.time)}</span>
+            <span class="reminder-title">${escapeHtml(item.title)}</span>
+          </li>
+        `
+          )
+          .join("")}
+      </ul>
+    </section>
+  `;
+}
+
+function renderJournal(): string {
   const entries = filteredEntries();
   const tabs: Array<{ id: EntryType | "all"; label: string }> = [
     { id: "all", label: "全部" },
@@ -423,16 +585,9 @@ function renderList(): string {
   ];
 
   return `
-    <div class="screen">
-      <header class="app-header">
-        ${renderBrand(true)}
-        <div class="header-actions">
-          <button class="icon-btn ${state.showHidden ? "active" : ""}" id="btn-hidden" title="顯示隱藏項目">🙈</button>
-          <button class="icon-btn" id="btn-theme" title="切換主題">${getResolvedTheme() === "light" ? "🌙" : "☀️"}</button>
-          <button class="icon-btn" id="btn-settings" title="設定">⚙️</button>
-          <button class="icon-btn" id="btn-lock" title="上鎖">🔒</button>
-        </div>
-      </header>
+    <div class="screen with-nav">
+      ${renderAppHeader()}
+      ${renderTodayPanel()}
 
       <div class="tabs">
         ${tabs
@@ -460,7 +615,151 @@ function renderList(): string {
         }
       </div>
     </div>
+    ${renderBottomNav("journal")}
     <button class="fab" id="btn-new" title="新增">+</button>
+  `;
+}
+
+function renderCalendar(): string {
+  const grid = getMonthGrid(state.calendarYear, state.calendarMonth);
+  const dayEvents = eventsOnDate(state.events, state.selectedDate);
+  const dayTodos = todosOnDate(state.todos, state.selectedDate).filter((t) => !t.done);
+
+  return `
+    <div class="screen with-nav">
+      ${renderAppHeader()}
+
+      <section class="line-card calendar-card">
+        <div class="calendar-head">
+          <button class="icon-line-btn" id="cal-prev" type="button">←</button>
+          <h2>${formatMonthLabel(state.calendarYear, state.calendarMonth)}</h2>
+          <button class="icon-line-btn" id="cal-next" type="button">→</button>
+        </div>
+
+        <div class="calendar-weekdays">
+          ${WEEKDAY_LABELS.map((d) => `<span>${d}</span>`).join("")}
+        </div>
+
+        <div class="calendar-grid">
+          ${grid
+            .map((cell) => {
+              const count = countForDate(state.todos, state.events, cell.date);
+              return `
+              <button
+                type="button"
+                class="calendar-day ${cell.inMonth ? "" : "is-out"} ${cell.isToday ? "is-today" : ""} ${state.selectedDate === cell.date ? "is-selected" : ""}"
+                data-date="${cell.date}"
+              >
+                <span>${parseInt(cell.date.slice(8), 10)}</span>
+                ${count ? `<i class="day-dot"></i>` : ""}
+              </button>
+            `;
+            })
+            .join("")}
+        </div>
+      </section>
+
+      <section class="line-card day-panel">
+        <div class="section-head">
+          <h3>${formatDayLabel(state.selectedDate)}</h3>
+        </div>
+
+        <ul class="planner-list">
+          ${
+            dayEvents.length + dayTodos.length === 0
+              ? `<li class="planner-empty">這天還沒有安排</li>`
+              : [
+                  ...dayEvents.map(
+                    (e) => `
+                <li class="planner-item" data-kind="event" data-id="${e.id}">
+                  <span class="planner-time">${formatTimeLabel(e.time)}</span>
+                  <span class="planner-title">${escapeHtml(e.title)}</span>
+                  ${e.remind ? `<span class="planner-tag">提醒</span>` : ""}
+                  <button type="button" class="item-delete" data-delete-event="${e.id}">×</button>
+                </li>
+              `
+                  ),
+                  ...dayTodos.map(
+                    (t) => `
+                <li class="planner-item" data-kind="todo" data-id="${t.id}">
+                  <span class="planner-time">${formatTimeLabel(t.dueTime)}</span>
+                  <span class="planner-title">${escapeHtml(t.title)}</span>
+                  <span class="planner-tag">待辦</span>
+                </li>
+              `
+                  ),
+                ].join("")
+          }
+        </ul>
+
+        <form class="planner-form" id="add-event-form">
+          <input id="event-title" placeholder="新增行程或提醒" required />
+          <div class="planner-form-row">
+            <input id="event-time" type="time" />
+            <label class="inline-check"><input id="event-remind" type="checkbox" checked /> 提醒</label>
+          </div>
+          <button class="btn btn-primary btn-block" type="submit">加入行事曆</button>
+        </form>
+      </section>
+    </div>
+    ${renderBottomNav("calendar")}
+  `;
+}
+
+function renderTodos(): string {
+  const todos = sortedTodos(state.todos, state.todoFilter);
+  const today = todayKey();
+
+  return `
+    <div class="screen with-nav">
+      ${renderAppHeader()}
+
+      <section class="line-card">
+        <form class="todo-add-form" id="add-todo-form">
+          <input id="todo-title" placeholder="新增待辦事項…" required />
+          <div class="planner-form-row">
+            <input id="todo-date" type="date" value="${today}" />
+            <input id="todo-time" type="time" />
+          </div>
+          <label class="inline-check"><input id="todo-remind" type="checkbox" checked /> 到期提醒</label>
+          <button class="btn btn-primary btn-block" type="submit">加入待辦</button>
+        </form>
+      </section>
+
+      <div class="filter-row">
+        ${(["active", "all", "done"] as const)
+          .map((f) => {
+            const labels = { active: "進行中", all: "全部", done: "已完成" };
+            return `<button type="button" class="filter-chip ${state.todoFilter === f ? "active" : ""}" data-todo-filter="${f}">${labels[f]}</button>`;
+          })
+          .join("")}
+      </div>
+
+      <div class="todo-list" id="todo-list">
+        ${
+          todos.length === 0
+            ? `<div class="empty-state compact"><p>沒有待辦事項</p></div>`
+            : todos
+                .map(
+                  (todo) => `
+            <div class="todo-item ${todo.done ? "is-done" : ""}" data-id="${todo.id}">
+              <label class="todo-check">
+                <input type="checkbox" data-toggle-todo="${todo.id}" ${todo.done ? "checked" : ""} />
+                <span>${escapeHtml(todo.title)}</span>
+              </label>
+              <div class="todo-meta">
+                ${todo.dueDate ? `<span>${formatDateShort(todo.dueDate)}${todo.dueTime ? ` · ${todo.dueTime}` : ""}</span>` : ""}
+                ${todo.remind ? `<span class="planner-tag">提醒</span>` : ""}
+              </div>
+              <button type="button" class="item-delete" data-delete-todo="${todo.id}">×</button>
+            </div>
+          `
+                )
+                .join("")
+        }
+      </div>
+    </div>
+    ${renderBottomNav("todos")}
   `;
 }
 
@@ -598,6 +897,18 @@ function renderSettings(): string {
         </section>
 
         <section class="entry-card">
+          <h3>提醒通知</h3>
+          <p>到期時以瀏覽器通知提醒你（需允許通知權限）。</p>
+          <label class="inline-check" style="margin-top:12px;">
+            <input type="checkbox" id="notify-enabled" ${loadNotificationPref() ? "checked" : ""} />
+            啟用行程與待辦提醒
+          </label>
+          <button class="btn btn-secondary btn-block" type="button" id="btn-notify-permission" style="margin-top:12px;">
+            請求通知權限
+          </button>
+        </section>
+
+        <section class="entry-card">
           <h3>雲端同步（可選）</h3>
           <p>上傳的是<strong>已加密</strong>的保險庫，伺服器無法讀取內容。請使用強同步金鑰。</p>
           <form id="sync-form" style="margin-top:12px;">
@@ -687,7 +998,7 @@ function render(): void {
       bindEntryUnlockEvents(entry);
       return;
     }
-    state.view = "list";
+    state.view = "journal";
     state.editingId = null;
   }
 
@@ -704,12 +1015,24 @@ function render(): void {
       bindEditorEvents(entry);
       return;
     }
-    state.view = "list";
+    state.view = "journal";
     state.editingId = null;
   }
 
-  root.innerHTML = renderList();
-  bindListEvents();
+  if (state.view === "calendar") {
+    root.innerHTML = renderCalendar();
+    bindCalendarEvents();
+    return;
+  }
+
+  if (state.view === "todos") {
+    root.innerHTML = renderTodos();
+    bindTodoEvents();
+    return;
+  }
+
+  root.innerHTML = renderJournal();
+  bindJournalEvents();
 }
 
 function openNew(type: EntryType = "diary"): void {
@@ -745,7 +1068,7 @@ function openEditor(id: string): void {
 function bindEntryUnlockEvents(entry: Entry): void {
   document.getElementById("btn-unlock-back")!.addEventListener("click", () => {
     touchActivity();
-    state.view = "list";
+    state.view = "journal";
     state.editingId = null;
     render();
   });
@@ -779,19 +1102,31 @@ function cycleTheme(): void {
   render();
 }
 
-function bindListEvents(): void {
-  document.getElementById("btn-lock")!.addEventListener("click", lock);
-  document.getElementById("btn-hidden")!.addEventListener("click", () => {
+function bindSharedChrome(): void {
+  document.getElementById("btn-lock")?.addEventListener("click", lock);
+  document.getElementById("btn-hidden")?.addEventListener("click", () => {
     touchActivity();
     state.showHidden = !state.showHidden;
     render();
   });
-  document.getElementById("btn-theme")!.addEventListener("click", cycleTheme);
-  document.getElementById("btn-settings")!.addEventListener("click", () => {
+  document.getElementById("btn-theme")?.addEventListener("click", cycleTheme);
+  document.getElementById("btn-settings")?.addEventListener("click", () => {
     touchActivity();
     state.view = "settings";
     render();
   });
+
+  document.querySelectorAll("[data-nav]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      touchActivity();
+      state.view = (btn as HTMLElement).dataset.nav as View;
+      render();
+    });
+  });
+}
+
+function bindJournalEvents(): void {
+  bindSharedChrome();
 
   document.getElementById("btn-new")!.addEventListener("click", () => {
     const type = state.filter === "all" ? "diary" : state.filter;
@@ -831,6 +1166,120 @@ function bindListEvents(): void {
   bindEntryCards();
 }
 
+function bindCalendarEvents(): void {
+  bindSharedChrome();
+
+  document.getElementById("cal-prev")!.addEventListener("click", () => {
+    touchActivity();
+    const next = shiftMonth(state.calendarYear, state.calendarMonth, -1);
+    state.calendarYear = next.year;
+    state.calendarMonth = next.month;
+    render();
+  });
+
+  document.getElementById("cal-next")!.addEventListener("click", () => {
+    touchActivity();
+    const next = shiftMonth(state.calendarYear, state.calendarMonth, 1);
+    state.calendarYear = next.year;
+    state.calendarMonth = next.month;
+    render();
+  });
+
+  document.querySelectorAll(".calendar-day[data-date]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      touchActivity();
+      state.selectedDate = (btn as HTMLElement).dataset.date!;
+      render();
+    });
+  });
+
+  document.getElementById("add-event-form")!.addEventListener("submit", (e) => {
+    e.preventDefault();
+    touchActivity();
+    const title = (document.getElementById("event-title") as HTMLInputElement).value.trim();
+    const time = (document.getElementById("event-time") as HTMLInputElement).value;
+    const remind = (document.getElementById("event-remind") as HTMLInputElement).checked;
+    if (!title) return;
+
+    upsertEvent({
+      id: uid(),
+      title,
+      date: state.selectedDate,
+      time: time || undefined,
+      remind,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+    showToast("已加入行事曆");
+    render();
+  });
+
+  document.querySelectorAll("[data-delete-event]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      touchActivity();
+      deleteEvent((btn as HTMLElement).dataset.deleteEvent!);
+      render();
+    });
+  });
+}
+
+function bindTodoEvents(): void {
+  bindSharedChrome();
+
+  document.getElementById("add-todo-form")!.addEventListener("submit", (e) => {
+    e.preventDefault();
+    touchActivity();
+    const title = (document.getElementById("todo-title") as HTMLInputElement).value.trim();
+    const dueDate = (document.getElementById("todo-date") as HTMLInputElement).value;
+    const dueTime = (document.getElementById("todo-time") as HTMLInputElement).value;
+    const remind = (document.getElementById("todo-remind") as HTMLInputElement).checked;
+    if (!title) return;
+
+    upsertTodo({
+      id: uid(),
+      title,
+      done: false,
+      dueDate: dueDate || undefined,
+      dueTime: dueTime || undefined,
+      remind,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+    showToast("已加入待辦");
+    render();
+  });
+
+  document.querySelectorAll("[data-todo-filter]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      touchActivity();
+      state.todoFilter = (btn as HTMLElement).dataset.todoFilter as AppState["todoFilter"];
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-toggle-todo]").forEach((input) => {
+    input.addEventListener("change", () => {
+      touchActivity();
+      const id = (input as HTMLInputElement).dataset.toggleTodo!;
+      const todo = state.todos.find((t) => t.id === id);
+      if (!todo) return;
+      todo.done = (input as HTMLInputElement).checked;
+      todo.updatedAt = Date.now();
+      upsertTodo(todo);
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-delete-todo]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      touchActivity();
+      deleteTodo((btn as HTMLElement).dataset.deleteTodo!);
+      render();
+    });
+  });
+}
+
 function bindEntryCards(): void {
   document.querySelectorAll(".entry-card[data-id]").forEach((card) => {
     card.addEventListener("click", () => {
@@ -865,7 +1314,7 @@ function bindEditorEvents(entry: Entry): void {
 
   document.getElementById("btn-back")!.addEventListener("click", () => {
     touchActivity();
-    state.view = "list";
+    state.view = "journal";
     state.editingId = null;
     render();
   });
@@ -874,7 +1323,7 @@ function bindEditorEvents(entry: Entry): void {
     if (!confirm("確定要刪除這則記錄嗎？")) return;
     touchActivity();
     deleteEntry(entry.id);
-    state.view = "list";
+    state.view = "journal";
     state.editingId = null;
     render();
   });
@@ -920,7 +1369,7 @@ function bindEditorEvents(entry: Entry): void {
     }
 
     upsertEntry(entry);
-    state.view = "list";
+    state.view = "journal";
     state.editingId = null;
     render();
     showToast("已儲存");
@@ -935,8 +1384,27 @@ function bindEditorEvents(entry: Entry): void {
 function bindSettingsEvents(): void {
   document.getElementById("btn-back-settings")!.addEventListener("click", () => {
     touchActivity();
-    state.view = "list";
+    state.view = "journal";
     render();
+  });
+
+  document.getElementById("notify-enabled")!.addEventListener("change", async () => {
+    touchActivity();
+    const enabled = (document.getElementById("notify-enabled") as HTMLInputElement).checked;
+    saveNotificationPref(enabled);
+    if (enabled) {
+      const perm = await requestNotificationPermission();
+      if (perm !== "granted") showToast("請在瀏覽器設定中允許通知");
+      else showToast("提醒已啟用");
+    }
+  });
+
+  document.getElementById("btn-notify-permission")!.addEventListener("click", async () => {
+    touchActivity();
+    const perm = await requestNotificationPermission();
+    if (perm === "granted") showToast("已允許通知");
+    else if (perm === "unsupported") showToast("此瀏覽器不支援通知");
+    else showToast("通知權限未開啟");
   });
 
   document.querySelectorAll(".theme-option").forEach((btn) => {
@@ -1005,7 +1473,7 @@ function bindSettingsEvents(): void {
     touchActivity();
     const backup = await createBackup(
       state.password,
-      state.entries,
+      vaultData(),
       state.salt,
       state.vaultUpdatedAt
     );
@@ -1025,14 +1493,12 @@ function bindSettingsEvents(): void {
       if (backup.version !== 1 || !backup.data) throw new Error("invalid");
       const password = prompt("請輸入備份檔的密碼（通常與目前密碼相同）：");
       if (!password) return;
-      const { entries, salt, updatedAt } = await restoreBackup(password, backup);
+      const { entries, todos, events, salt, updatedAt } = await restoreBackup(password, backup);
       if (!confirm("匯入會覆蓋目前裝置上的所有記錄，確定繼續？")) return;
-      state.entries = entries;
-      state.salt = salt;
-      state.vaultUpdatedAt = updatedAt;
+      loadVaultIntoState({ entries, todos, events, salt, updatedAt });
       await persist();
       showToast("備份已還原");
-      state.view = "list";
+      state.view = "journal";
       render();
     } catch {
       if (errorEl) errorEl.textContent = "匯入失敗：密碼錯誤或檔案格式不正確。";
@@ -1074,10 +1540,9 @@ function bindSettingsEvents(): void {
 
     const next = await changePassword(oldPassword, newPassword, buffer);
     await saveVault(next);
-    const { salt, updatedAt } = await decryptVault(newPassword, next);
+    const data = await decryptVault(newPassword, next);
     state.password = newPassword;
-    state.salt = salt;
-    state.vaultUpdatedAt = updatedAt;
+    loadVaultIntoState(data);
     errorEl.textContent = "";
     showToast("密碼已更新");
   });
