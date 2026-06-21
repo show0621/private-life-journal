@@ -351,6 +351,39 @@ body::after {
   border-bottom: 1px solid var(--border-light);
 }
 
+.auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.auth-tab {
+  min-height: var(--touch);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-soft);
+  color: var(--text-muted);
+  font-size: 0.86rem;
+}
+
+.auth-tab.active {
+  border-color: var(--accent);
+  background: var(--bg);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.sync-steps {
+  margin: 0 0 12px;
+  padding-left: 1.1rem;
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  line-height: 1.65;
+}
+
+.sync-steps li + li { margin-top: 4px; }
+
 .auth-card h1, .panel h2 {
   margin: 0 0 8px;
   font-family: var(--font-serif);
