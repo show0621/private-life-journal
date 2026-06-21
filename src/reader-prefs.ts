@@ -47,7 +47,11 @@ function clampFontSize(value: number): number {
 
 export function applyReaderFontSize(size?: number): void {
   const value = clampFontSize(size ?? loadReaderPreferences().fontSize);
-  document.documentElement.style.setProperty("--read-font-size", `${value}px`);
+  const px = `${value}px`;
+  document.documentElement.style.setProperty("--read-font-size", px);
+  document.querySelectorAll<HTMLElement>(".entry-readonly").forEach((el) => {
+    el.style.setProperty("font-size", px, "important");
+  });
 }
 
 export function setReaderFontSize(size: number): number {

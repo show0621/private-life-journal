@@ -13,6 +13,7 @@ import { bindRichEditor, getRichContent, renderRichToolbar } from "./rich-editor
 import { clearVault, hasVault, loadVault, saveVault } from "./storage";
 import { scrollInputIntoView } from "./mobile";
 import {
+  applyReaderFontSize,
   formatReaderFontSize,
   loadReaderPreferences,
   MAX_READ_FONT,
@@ -1204,6 +1205,8 @@ function openNew(type: EntryType = "diary"): void {
 }
 
 function bindEntryViewEvents(entry: Entry): void {
+  applyReaderFontSize();
+
   document.getElementById("btn-view-shield")!.addEventListener("click", () => {
     touchActivity();
     showPrivacyShield();
