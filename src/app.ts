@@ -2,6 +2,7 @@ import {
   changePassword,
   createBackup,
   decryptVault,
+  defaultCompanion,
   encryptVault,
   restoreBackup,
   verifyPassword,
@@ -49,35 +50,10 @@ import {
   WEEKDAY_LABELS,
 } from "./planner";
 import { pullFromCloud, pushToCloud, testCloudConnection } from "./sync";
-import {
-  defaultCompanion,
-  equipWeapon,
-  grantJournalXp,
-  hatchDigitalEgg,
-  JOURNAL_XP,
-  runBattle,
-  setDigitalPath,
-  startAdventurer,
-  startDigital,
-} from "./companion/game";
-import { playBattleArenaFx, playEvolveFx } from "./companion/effects";
-import {
-  destroyCompanionWalker,
-  getWalkerElement,
-  injectCompanionChrome,
-  mountCompanionWalker,
-  refreshCompanionWalker,
-  renderCompanionScreen,
-  setBattleArenaMonster,
-} from "./companion/ui";
-import type { DigitalPath } from "./types";
 import { getResolvedTheme, getStoredTheme, setStoredTheme } from "./theme";
 import type {
-  AdventurerClass,
   BackupFile,
   CalendarEvent,
-  CompanionState,
-  DigitalSpecies,
   Entry,
   EntryType,
   SyncSettings,
@@ -103,7 +79,7 @@ const IOS_PASSWORD_INPUT =
 const IOS_MASKED_INPUT =
   'type="text" class="masked-input" inputmode="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"';
 
-type MainView = "journal" | "calendar" | "todos" | "companion";
+type MainView = "journal" | "calendar" | "todos";
 type View = MainView | "entry-view" | "editor" | "settings" | "entry-unlock";
 
 interface AppState {
@@ -129,7 +105,6 @@ interface AppState {
   calendarMonth: number;
   selectedDate: string;
   todoFilter: "all" | "active" | "done";
-  companion: CompanionState;
 }
 
 const now = new Date();
@@ -155,7 +130,6 @@ const state: AppState = {
   calendarMonth: now.getMonth(),
   selectedDate: todayKey(),
   todoFilter: "active",
-  companion: defaultCompanion(),
 };
 
 const root = document.getElementById("app")!;
@@ -176,14 +150,12 @@ function resetLockTimer(): void {
 function lock(): void {
   stopReminderLoop();
   hidePrivacyShield();
-  destroyCompanionWalker();
   state.unlocked = false;
   state.password = "";
   state.salt = undefined;
   state.entries = [];
   state.todos = [];
   state.events = [];
-  state.companion = defaultCompanion();
   state.view = "journal";
   state.editingId = null;
   state.unlockedEntryIds.clear();
@@ -195,7 +167,7 @@ function vaultData(): VaultData {
     entries: state.entries,
     todos: state.todos,
     events: state.events,
-    companion: state.companion,
+    companion: defaultCompanion(),
   };
 }
 
@@ -203,50 +175,8 @@ function loadVaultIntoState(data: VaultData & { salt: ArrayBuffer; updatedAt: nu
   state.entries = data.entries;
   state.todos = data.todos;
   state.events = data.events;
-  state.companion = data.companion ?? defaultCompanion();
   state.salt = data.salt;
   state.vaultUpdatedAt = data.updatedAt;
-}
-
-function mountCompanionIfNeeded(): void {
-  if (state.companion.mode === "none") {
-    destroyCompanionWalker();
-    return;
-  }
-  const placement = state.view === "editor" ? "editor" : "footer";
-  const onTap = () => {
-    touchActivity();
-    state.view = "companion";
-    render();
-  };
-  if (getWalkerElement()) {
-    refreshCompanionWalker(state.companion, placement);
-  } else {
-    mountCompanionWalker(state.companion, onTap, placement);
-  }
-}
-
-async function runBattleWithFx(): Promise<void> {
-  const arena = document.getElementById("battle-arena");
-  const hero = document.querySelector(".arena-hero") as HTMLElement | null;
-  const foe = document.querySelector(".arena-foe") as HTMLElement | null;
-  const result = runBattle(state.companion);
-  if (arena) {
-    arena.classList.add("is-active");
-    setBattleArenaMonster(result.monster.sprite);
-  }
-  if (hero && foe && result.win) {
-    await playBattleArenaFx(hero, foe, true);
-  } else if (hero) {
-    await playBattleArenaFx(hero, foe ?? hero, result.win);
-  }
-  if (result.evolved) {
-    await playEvolveFx(document.querySelector(".hero-sprite-wrap") as HTMLElement);
-    await playEvolveFx(getWalkerElement());
-  }
-  schedulePersist();
-  showToast(result.notes.join(" · "));
-  render();
 }
 
 function isLocalVaultEmpty(): boolean {
@@ -443,7 +373,7 @@ function openEntryView(id: string): void {
   touchActivity();
   const entry = getEntry(id);
   if (!entry) return;
-  if (state.view === "journal" || state.view === "calendar" || state.view === "todos" || state.view === "companion") {
+  if (state.view === "journal" || state.view === "calendar" || state.view === "todos") {
     state.returnView = state.view;
   }
   state.editingId = id;
@@ -541,7 +471,7 @@ async function runCloudSync(manual: boolean): Promise<"pulled" | "pushed" | "noo
           await applyRemoteVault(remote);
           markSyncOk(settings);
           if (manual) showToast("已從雲端同步");
-          if (state.view === "journal" || state.view === "calendar" || state.view === "todos" || state.view === "companion") render();
+          if (state.view === "journal" || state.view === "calendar" || state.view === "todos") render();
           return "pulled";
         }
       }
@@ -796,7 +726,6 @@ function bindAuthEvents(hasLocalVault: boolean): void {
     state.entries = [];
     state.todos = [];
     state.events = [];
-    state.companion = defaultCompanion();
     state.vaultUpdatedAt = Date.now();
     const buffer = await encryptVault(password, vaultData(), undefined, state.vaultUpdatedAt);
     await saveVault(buffer);
@@ -831,7 +760,7 @@ function runAutoCloudSync(reason: "unlock" | "foreground" | "save"): void {
   void runCloudSync(false).then((result) => {
     if (result === "pulled") {
       showToast(reason === "foreground" ? "已同步雲端最新內容" : "已從雲端同步最新內容");
-      if (state.view === "journal" || state.view === "calendar" || state.view === "todos" || state.view === "companion") render();
+      if (state.view === "journal" || state.view === "calendar" || state.view === "todos") render();
     }
   });
 }
@@ -857,7 +786,6 @@ function renderBottomNav(active: MainView): string {
     { id: "journal", label: "日記" },
     { id: "calendar", label: "行事曆" },
     { id: "todos", label: "待辦" },
-    { id: "companion", label: "夥伴" },
   ] as const;
   return `
     <nav class="bottom-nav">
@@ -1395,8 +1323,6 @@ function renderSettings(): string {
 }
 
 function render(): void {
-  destroyCompanionWalker();
-
   if (!state.unlocked) {
     renderAuth();
     return;
@@ -1407,7 +1333,6 @@ function render(): void {
     if (entry) {
       root.innerHTML = renderEntryUnlock(entry);
       bindEntryUnlockEvents(entry);
-      mountCompanionIfNeeded();
       return;
     }
     state.view = "journal";
@@ -1419,7 +1344,6 @@ function render(): void {
     if (entry) {
       root.innerHTML = renderEntryView(entry);
       bindEntryViewEvents(entry);
-      mountCompanionIfNeeded();
       return;
     }
     state.view = state.returnView;
@@ -1429,7 +1353,6 @@ function render(): void {
   if (state.view === "settings") {
     root.innerHTML = renderSettings();
     bindSettingsEvents();
-    mountCompanionIfNeeded();
     return;
   }
 
@@ -1438,41 +1361,26 @@ function render(): void {
     if (entry) {
       root.innerHTML = renderEditor(entry);
       bindEditorEvents(entry);
-      mountCompanionIfNeeded();
       return;
     }
     state.view = "journal";
     state.editingId = null;
   }
 
-  if (state.view === "companion") {
-    root.innerHTML = injectCompanionChrome(
-      renderCompanionScreen(state.companion),
-      renderAppHeader({ showHiddenToggle: false }),
-      renderBottomNav("companion")
-    );
-    bindCompanionEvents();
-    mountCompanionIfNeeded();
-    return;
-  }
-
   if (state.view === "calendar") {
     root.innerHTML = renderCalendar();
     bindCalendarEvents();
-    mountCompanionIfNeeded();
     return;
   }
 
   if (state.view === "todos") {
     root.innerHTML = renderTodos();
     bindTodoEvents();
-    mountCompanionIfNeeded();
     return;
   }
 
   root.innerHTML = renderJournal();
   bindJournalEvents();
-  mountCompanionIfNeeded();
 }
 
 function openNew(type: EntryType = "diary"): void {
@@ -1490,7 +1398,7 @@ function openNew(type: EntryType = "diary"): void {
   state.editingId = entry.id;
   state.editorIsNew = true;
   state.returnView =
-    state.view === "journal" || state.view === "calendar" || state.view === "todos" || state.view === "companion"
+    state.view === "journal" || state.view === "calendar" || state.view === "todos"
       ? state.view
       : "journal";
   state.view = "editor";
@@ -1625,77 +1533,6 @@ function bindSharedChrome(): void {
       state.view = (btn as HTMLElement).dataset.nav as View;
       render();
     });
-  });
-}
-
-function bindCompanionEvents(): void {
-  bindSharedChrome();
-
-  document.querySelectorAll("[data-start-adv]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      touchActivity();
-      const cls = (btn as HTMLElement).dataset.startAdv as AdventurerClass;
-      state.companion = startAdventurer(state.companion, cls);
-      schedulePersist();
-      showToast(`${cls === "knight" ? "騎士" : cls === "mage" ? "法師" : "獵人"} 出發！`);
-      render();
-    });
-  });
-
-  document.querySelectorAll("[data-start-dig]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      touchActivity();
-      const species = (btn as HTMLElement).dataset.startDig as DigitalSpecies;
-      state.companion = startDigital(state.companion, species);
-      schedulePersist();
-      showToast("數碼蛋已開始孵化，寫日記可加速成長");
-      render();
-    });
-  });
-
-  document.getElementById("btn-hatch")?.addEventListener("click", async () => {
-    touchActivity();
-    const notes = hatchDigitalEgg(state.companion);
-    if (notes.length) await playEvolveFx(document.querySelector(".hero-sprite-wrap") as HTMLElement);
-    schedulePersist();
-    showToast(notes.length ? notes.join(" · ") : "還需要多寫一些日記");
-    render();
-  });
-
-  document.getElementById("btn-battle")?.addEventListener("click", () => {
-    touchActivity();
-    void runBattleWithFx();
-  });
-
-  document.querySelectorAll("[data-dig-path]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      touchActivity();
-      const path = (btn as HTMLElement).dataset.digPath as DigitalPath;
-      const notes = setDigitalPath(state.companion, path);
-      schedulePersist();
-      showToast(notes.join(" · "));
-      render();
-    });
-  });
-
-  document.querySelectorAll("[data-equip]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      touchActivity();
-      const id = (btn as HTMLElement).dataset.equip!;
-      if (equipWeapon(state.companion, id)) {
-        schedulePersist();
-        showToast("已裝備武器");
-        render();
-      }
-    });
-  });
-
-  document.getElementById("btn-companion-reset")?.addEventListener("click", () => {
-    if (!confirm("確定要重新選擇夥伴？等級與武器會重置。")) return;
-    touchActivity();
-    state.companion = defaultCompanion();
-    schedulePersist();
-    render();
   });
 }
 
@@ -1938,21 +1775,11 @@ function bindEditorEvents(entry: Entry): void {
       state.unlockedEntryIds.delete(entry.id);
     }
 
-    const xpNotes = grantJournalXp(
-      state.companion,
-      JOURNAL_XP[entry.type],
-      `寫下${ENTRY_TYPE_LABELS[entry.type]}`
-    );
-
     upsertEntry(entry);
     state.editorIsNew = false;
     state.view = "entry-view";
     render();
-    if (xpNotes.some((n) => n.includes("進化") || n.includes("升級"))) {
-      void playEvolveFx(getWalkerElement());
-    }
-    if (xpNotes.length) showToast(`${xpNotes.join(" · ")} · 已儲存`);
-    else showToast("已儲存");
+    showToast("已儲存");
   });
 
   document.getElementById("entry-title")?.addEventListener("focus", (e) => {

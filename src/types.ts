@@ -94,70 +94,19 @@ export interface CalendarEvent {
 
 
 
-export type CompanionMode = "none" | "adventurer" | "digital";
-
-export type AdventurerClass = "knight" | "mage" | "hunter";
-
-export type DigitalSpecies = "ember" | "tide" | "leaf";
-
-export type DigitalPath = "a" | "b";
-
-export type WeaponRarity = "common" | "rare" | "epic";
-
-
-
-export interface CompanionWeapon {
-
-  id: string;
-
-  name: string;
-
-  rarity: WeaponRarity;
-
-  atk: number;
-
-  classTag?: AdventurerClass | "any";
-
-}
-
-
+export type CompanionMode = "none";
 
 export interface CompanionState {
-
   mode: CompanionMode;
-
-  adventurerClass?: AdventurerClass;
-
-  digitalSpecies?: DigitalSpecies;
-
-  digitalPath?: DigitalPath;
-
   level: number;
-
   xp: number;
-
   xpToNext: number;
-
   stage: number;
-
   hp: number;
-
   maxHp: number;
-
-  weapons: CompanionWeapon[];
-
-  equippedWeaponId?: string;
-
-  hasWolf?: boolean;
-
+  weapons: [];
   battlesWon: number;
-
   journalXpTotal: number;
-
-  lastBattleAt?: number;
-
-  battleLog?: string[];
-
 }
 
 

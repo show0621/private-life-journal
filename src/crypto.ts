@@ -8,8 +8,8 @@ import type {
   VaultPayload,
   VaultPayloadV2,
   VaultPayloadV3,
+  CompanionState,
 } from "./types";
-import { defaultCompanion, normalizeCompanion } from "./companion/game";
 
 const PBKDF2_ITERATIONS = 250_000;
 const SALT_BYTES = 16;
@@ -115,6 +115,25 @@ function normalizeEvent(event: CalendarEvent): CalendarEvent {
     ...event,
     remind: event.remind ?? false,
   };
+}
+
+export function defaultCompanion(): CompanionState {
+  return {
+    mode: "none",
+    level: 1,
+    xp: 0,
+    xpToNext: 100,
+    stage: 0,
+    hp: 30,
+    maxHp: 30,
+    weapons: [],
+    battlesWon: 0,
+    journalXpTotal: 0,
+  };
+}
+
+function normalizeCompanion(_raw?: Partial<CompanionState> | null): CompanionState {
+  return defaultCompanion();
 }
 
 function normalizePayload(raw: Entry[] | VaultPayloadV2 | VaultPayloadV3 | VaultPayload): VaultPayload {
