@@ -11,6 +11,7 @@ import { truncateContent } from "./html";
 import { loadSyncSettings, saveSyncSettings } from "./preferences";
 import { bindRichEditor, getRichContent, renderRichToolbar } from "./rich-editor";
 import { clearVault, hasVault, loadVault, saveVault } from "./storage";
+import { scrollInputIntoView } from "./mobile";
 import {
   loadNotificationPref,
   requestNotificationPermission,
@@ -412,11 +413,11 @@ function renderSetupForm(): string {
     <form id="setup-form">
       <div class="field">
         <label for="setup-password">密碼</label>
-        <input id="setup-password" type="password" autocomplete="new-password" minlength="6" required placeholder="至少 6 個字元" />
+        <input id="setup-password" type="password" autocomplete="new-password" minlength="6" required placeholder="至少 6 個字元" enterkeyhint="next" />
       </div>
       <div class="field">
         <label for="setup-confirm">確認密碼</label>
-        <input id="setup-confirm" type="password" autocomplete="new-password" minlength="6" required placeholder="再輸入一次" />
+        <input id="setup-confirm" type="password" autocomplete="new-password" minlength="6" required placeholder="再輸入一次" enterkeyhint="done" />
       </div>
       <p class="error-text" id="auth-error"></p>
       <button class="btn btn-primary btn-block" type="submit">開始使用</button>
@@ -434,7 +435,7 @@ function renderUnlockForm(): string {
     <form id="unlock-form">
       <div class="field">
         <label for="unlock-password">密碼</label>
-        <input id="unlock-password" type="password" autocomplete="current-password" required placeholder="輸入密碼" />
+        <input id="unlock-password" type="password" autocomplete="current-password" required placeholder="輸入密碼" enterkeyhint="go" />
       </div>
       <p class="error-text" id="auth-error"></p>
       <button class="btn btn-primary btn-block" type="submit">解鎖</button>
@@ -503,13 +504,14 @@ function bindAuthEvents(exists: boolean): void {
   });
 }
 
-function renderAppHeader(): string {
+function renderAppHeader(options?: { showHiddenToggle?: boolean }): string {
+  const showHiddenToggle = options?.showHiddenToggle ?? state.view === "journal";
   return `
     <header class="app-header">
       ${renderBrand(true)}
       <div class="header-actions">
-        <button class="icon-btn ${state.showHidden ? "active" : ""}" id="btn-hidden" title="顯示隱藏項目">🙈</button>
-        <button class="icon-btn" id="btn-theme" title="切換主題">${getResolvedTheme() === "light" ? "🌙" : "☀️"}</button>
+        ${showHiddenToggle ? `<button class="icon-btn ${state.showHidden ? "active" : ""}" id="btn-hidden" title="顯示隱藏項目">🙈</button>` : ""}
+        <button class="icon-btn mobile-hide" id="btn-theme" title="切換主題">${getResolvedTheme() === "light" ? "🌙" : "☀️"}</button>
         <button class="icon-btn" id="btn-settings" title="設定">⚙️</button>
         <button class="icon-btn" id="btn-lock" title="上鎖">🔒</button>
       </div>
@@ -693,12 +695,12 @@ function renderCalendar(): string {
         </ul>
 
         <form class="planner-form" id="add-event-form">
-          <input id="event-title" placeholder="新增行程或提醒" required />
+          <input id="event-title" placeholder="新增行程或提醒" required enterkeyhint="done" autocapitalize="sentences" />
           <div class="planner-form-row">
             <input id="event-time" type="time" />
             <label class="inline-check"><input id="event-remind" type="checkbox" checked /> 提醒</label>
           </div>
-          <button class="btn btn-primary btn-block" type="submit">加入行事曆</button>
+          <button class="btn btn-primary btn-block btn-touch" type="submit">加入行事曆</button>
         </form>
       </section>
     </div>
@@ -708,7 +710,6 @@ function renderCalendar(): string {
 
 function renderTodos(): string {
   const todos = sortedTodos(state.todos, state.todoFilter);
-  const today = todayKey();
 
   return `
     <div class="screen with-nav">
@@ -716,13 +717,13 @@ function renderTodos(): string {
 
       <section class="line-card">
         <form class="todo-add-form" id="add-todo-form">
-          <input id="todo-title" placeholder="新增待辦事項…" required />
+          <input id="todo-title" placeholder="新增待辦事項…" required enterkeyhint="next" autocapitalize="sentences" />
           <div class="planner-form-row">
-            <input id="todo-date" type="date" value="${today}" />
+            <input id="todo-date" type="date" value="${todayKey()}" />
             <input id="todo-time" type="time" />
           </div>
           <label class="inline-check"><input id="todo-remind" type="checkbox" checked /> 到期提醒</label>
-          <button class="btn btn-primary btn-block" type="submit">加入待辦</button>
+          <button class="btn btn-primary btn-block btn-touch" type="submit">加入待辦</button>
         </form>
       </section>
 
@@ -788,11 +789,9 @@ function renderEntryUnlock(_entry: Entry): string {
 function renderEditor(entry: Entry): string {
   return `
     <div class="editor-screen">
-      <div class="editor-toolbar">
-        <div class="editor-toolbar-left">
-          <button class="btn btn-secondary" id="btn-back">返回</button>
-        </div>
-        <button class="btn btn-danger" id="btn-delete">刪除</button>
+      <div class="editor-sticky-top">
+        <button class="btn btn-secondary btn-touch" type="button" id="btn-back">← 返回</button>
+        <button class="btn btn-primary btn-touch" type="submit" form="editor-form" id="btn-save-top">儲存</button>
       </div>
 
       <form class="editor-form" id="editor-form">
@@ -805,11 +804,11 @@ function renderEditor(entry: Entry): string {
           </select>
         </div>
 
-        <input class="editor-title" id="entry-title" placeholder="標題（可留空）" value="${escapeHtml(entry.title)}" />
+        <input class="editor-title" id="entry-title" placeholder="標題（可留空）" value="${escapeHtml(entry.title)}" enterkeyhint="next" autocapitalize="sentences" />
 
         <div class="field">
           <label for="entry-tags">標籤</label>
-          <input id="entry-tags" placeholder="以逗號分隔，例如：工作, 心情, 旅行" value="${escapeHtml((entry.tags ?? []).join(", "))}" />
+          <input id="entry-tags" placeholder="以逗號分隔，例如：工作, 心情, 旅行" value="${escapeHtml((entry.tags ?? []).join(", "))}" enterkeyhint="next" autocapitalize="off" />
         </div>
 
         ${
@@ -831,35 +830,44 @@ function renderEditor(entry: Entry): string {
         <div class="field">
           <label>內容</label>
           ${renderRichToolbar()}
-          <div class="rich-editor" id="entry-content" contenteditable="true"></div>
+          <div class="rich-editor" id="entry-content" contenteditable="true" autocapitalize="sentences" spellcheck="true"></div>
         </div>
 
-        <div class="privacy-row">
-          <div class="privacy-toggles">
-            <label class="privacy-toggle">
-              <input type="checkbox" id="entry-hidden" ${entry.hidden ? "checked" : ""} />
-              隱藏（不在清單顯示）
-            </label>
-            <label class="privacy-toggle">
-              <input type="checkbox" id="entry-locked" ${entry.locked ? "checked" : ""} />
-              上鎖（需 PIN 才能查看）
-            </label>
+        <details class="editor-advanced">
+          <summary>隱私與進階</summary>
+          <div class="privacy-row">
+            <div class="privacy-toggles">
+              <label class="privacy-toggle">
+                <input type="checkbox" id="entry-hidden" ${entry.hidden ? "checked" : ""} />
+                隱藏（不在清單顯示）
+              </label>
+              <label class="privacy-toggle">
+                <input type="checkbox" id="entry-locked" ${entry.locked ? "checked" : ""} />
+                上鎖（需 PIN 才能查看）
+              </label>
+            </div>
+            <div class="field entry-pin-field" id="entry-pin-field" style="margin:0;${entry.locked ? "" : "display:none"}">
+              <label for="entry-pin-set">${entry.lockHash ? "變更 PIN" : "設定 PIN"}</label>
+              <input id="entry-pin-set" type="password" inputmode="numeric" autocomplete="new-password" placeholder="至少 4 碼" enterkeyhint="done" />
+            </div>
           </div>
-          <div class="field entry-pin-field" id="entry-pin-field" style="margin:0;${entry.locked ? "" : "display:none"}">
-            <label for="entry-pin-set">${entry.lockHash ? "變更 PIN" : "設定 PIN"}</label>
-            <input id="entry-pin-set" type="password" inputmode="numeric" autocomplete="new-password" placeholder="至少 4 碼" />
-          </div>
-        </div>
 
-        <label style="display:flex; align-items:center; gap:8px; color:var(--text-muted); font-size:0.92rem;">
-          <input type="checkbox" id="entry-pinned" ${entry.pinned ? "checked" : ""} />
-          釘選置頂
-        </label>
+          <label class="privacy-toggle pin-row">
+            <input type="checkbox" id="entry-pinned" ${entry.pinned ? "checked" : ""} />
+            釘選置頂
+          </label>
 
-        <div class="editor-actions">
-          <button class="btn btn-primary" type="submit">儲存</button>
+          <button class="btn btn-danger btn-block btn-touch" type="button" id="btn-delete">刪除此記錄</button>
+        </details>
+
+        <div class="editor-actions editor-actions-inline">
+          <button class="btn btn-primary btn-block btn-touch" type="submit">儲存</button>
         </div>
       </form>
+
+      <div class="editor-sticky-bottom">
+        <button class="btn btn-primary btn-block btn-touch" type="submit" form="editor-form">儲存</button>
+      </div>
     </div>
   `;
 }
@@ -883,6 +891,11 @@ function renderSettings(): string {
       </header>
 
       <div class="entry-list">
+        <section class="entry-card ios-tip">
+          <h3>iPhone 使用建議</h3>
+          <p>在 Safari 點「分享」→「加入主畫面」，可像 App 一樣全螢幕使用，書寫與設定會更方便。</p>
+        </section>
+
         <section class="entry-card">
           <h3>外觀</h3>
           <p>選擇深色、淺色或跟隨系統。</p>
@@ -1373,6 +1386,18 @@ function bindEditorEvents(entry: Entry): void {
     state.editingId = null;
     render();
     showToast("已儲存");
+  });
+
+  document.getElementById("entry-title")?.addEventListener("focus", (e) => {
+    scrollInputIntoView(e.target as HTMLElement);
+  });
+
+  document.getElementById("entry-tags")?.addEventListener("focus", (e) => {
+    scrollInputIntoView(e.target as HTMLElement);
+  });
+
+  editor.addEventListener("focus", () => {
+    scrollInputIntoView(editor);
   });
 
   document.getElementById("entry-title")?.addEventListener("input", () => {

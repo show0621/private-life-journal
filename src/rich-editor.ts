@@ -38,26 +38,31 @@ export const COLOR_OPTIONS = [
 export function renderRichToolbar(): string {
   return `
     <div class="rich-toolbar" id="rich-toolbar">
-      <div class="rich-toolbar-row">
-        ${COMMANDS.map(
-          (item) =>
-            `<button type="button" class="rich-btn" data-cmd="${item.cmd}" data-value="${item.value ?? ""}" title="${item.title}">${item.label}</button>`
-        ).join("")}
-        <button type="button" class="rich-btn" data-cmd="createLink" title="連結">🔗</button>
-        <button type="button" class="rich-btn" data-cmd="removeFormat" title="清除格式">⌫</button>
-      </div>
-      <div class="rich-toolbar-row rich-toolbar-meta">
-        <select id="rich-font" class="rich-select" title="字體">
-          ${FONT_OPTIONS.map((o) => `<option value="${o.value}">${o.label}</option>`).join("")}
-        </select>
-        <select id="rich-size" class="rich-select" title="大小">
-          ${SIZE_OPTIONS.map((o) => `<option value="${o.value}">${o.label}</option>`).join("")}
-        </select>
-        <div class="color-palette" id="color-palette">
-          ${COLOR_OPTIONS.map(
-            (o) =>
-              `<button type="button" class="color-dot ${o.value ? "" : "color-dot-default"}" data-color="${o.value}" title="${o.label}" ${o.value ? `style="--dot:${o.value}"` : ""}></button>`
+      <button type="button" class="rich-toolbar-toggle" id="rich-toolbar-toggle" aria-expanded="false">
+        Aa 格式
+      </button>
+      <div class="rich-toolbar-body" id="rich-toolbar-body">
+        <div class="rich-toolbar-row">
+          ${COMMANDS.map(
+            (item) =>
+              `<button type="button" class="rich-btn" data-cmd="${item.cmd}" data-value="${item.value ?? ""}" title="${item.title}">${item.label}</button>`
           ).join("")}
+          <button type="button" class="rich-btn" data-cmd="createLink" title="連結">🔗</button>
+          <button type="button" class="rich-btn" data-cmd="removeFormat" title="清除格式">⌫</button>
+        </div>
+        <div class="rich-toolbar-row rich-toolbar-meta">
+          <select id="rich-font" class="rich-select" title="字體">
+            ${FONT_OPTIONS.map((o) => `<option value="${o.value}">${o.label}</option>`).join("")}
+          </select>
+          <select id="rich-size" class="rich-select" title="大小">
+            ${SIZE_OPTIONS.map((o) => `<option value="${o.value}">${o.label}</option>`).join("")}
+          </select>
+          <div class="color-palette" id="color-palette">
+            ${COLOR_OPTIONS.map(
+              (o) =>
+                `<button type="button" class="color-dot ${o.value ? "" : "color-dot-default"}" data-color="${o.value}" title="${o.label}" ${o.value ? `style="--dot:${o.value}"` : ""}></button>`
+            ).join("")}
+          </div>
         </div>
       </div>
     </div>
@@ -149,6 +154,13 @@ export function bindRichEditor(
   });
 
   bindMetaControls(editor, onChange);
+
+  document.getElementById("rich-toolbar-toggle")?.addEventListener("click", () => {
+    const toggle = document.getElementById("rich-toolbar-toggle")!;
+    const body = document.getElementById("rich-toolbar-body")!;
+    const open = body.classList.toggle("is-open");
+    toggle.setAttribute("aria-expanded", open ? "true" : "false");
+  });
 }
 
 export function getRichContent(editor: HTMLElement): { content: string; format: "html" } {
