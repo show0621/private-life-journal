@@ -56,15 +56,21 @@ import {
   hatchDigitalEgg,
   JOURNAL_XP,
   runBattle,
+  setDigitalPath,
   startAdventurer,
   startDigital,
 } from "./companion/game";
+import { playBattleArenaFx, playEvolveFx } from "./companion/effects";
 import {
   destroyCompanionWalker,
+  getWalkerElement,
   injectCompanionChrome,
   mountCompanionWalker,
+  refreshCompanionWalker,
   renderCompanionScreen,
+  setBattleArenaMonster,
 } from "./companion/ui";
+import type { DigitalPath } from "./types";
 import { getResolvedTheme, getStoredTheme, setStoredTheme } from "./theme";
 import type {
   AdventurerClass,
@@ -207,11 +213,40 @@ function mountCompanionIfNeeded(): void {
     destroyCompanionWalker();
     return;
   }
-  mountCompanionWalker(state.companion, () => {
+  const placement = state.view === "editor" ? "editor" : "footer";
+  const onTap = () => {
     touchActivity();
     state.view = "companion";
     render();
-  });
+  };
+  if (getWalkerElement()) {
+    refreshCompanionWalker(state.companion, placement);
+  } else {
+    mountCompanionWalker(state.companion, onTap, placement);
+  }
+}
+
+async function runBattleWithFx(): Promise<void> {
+  const arena = document.getElementById("battle-arena");
+  const hero = document.querySelector(".arena-hero") as HTMLElement | null;
+  const foe = document.querySelector(".arena-foe") as HTMLElement | null;
+  const result = runBattle(state.companion);
+  if (arena) {
+    arena.classList.add("is-active");
+    setBattleArenaMonster(result.monster.sprite);
+  }
+  if (hero && foe && result.win) {
+    await playBattleArenaFx(hero, foe, true);
+  } else if (hero) {
+    await playBattleArenaFx(hero, foe ?? hero, result.win);
+  }
+  if (result.evolved) {
+    await playEvolveFx(document.querySelector(".hero-sprite-wrap") as HTMLElement);
+    await playEvolveFx(getWalkerElement());
+  }
+  schedulePersist();
+  showToast(result.notes.join(" · "));
+  render();
 }
 
 function isLocalVaultEmpty(): boolean {
@@ -1618,9 +1653,10 @@ function bindCompanionEvents(): void {
     });
   });
 
-  document.getElementById("btn-hatch")?.addEventListener("click", () => {
+  document.getElementById("btn-hatch")?.addEventListener("click", async () => {
     touchActivity();
     const notes = hatchDigitalEgg(state.companion);
+    if (notes.length) await playEvolveFx(document.querySelector(".hero-sprite-wrap") as HTMLElement);
     schedulePersist();
     showToast(notes.length ? notes.join(" · ") : "還需要多寫一些日記");
     render();
@@ -1628,10 +1664,18 @@ function bindCompanionEvents(): void {
 
   document.getElementById("btn-battle")?.addEventListener("click", () => {
     touchActivity();
-    const result = runBattle(state.companion);
-    schedulePersist();
-    showToast(result.notes.join(" · "));
-    render();
+    void runBattleWithFx();
+  });
+
+  document.querySelectorAll("[data-dig-path]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      touchActivity();
+      const path = (btn as HTMLElement).dataset.digPath as DigitalPath;
+      const notes = setDigitalPath(state.companion, path);
+      schedulePersist();
+      showToast(notes.join(" · "));
+      render();
+    });
   });
 
   document.querySelectorAll("[data-equip]").forEach((btn) => {
@@ -1904,6 +1948,9 @@ function bindEditorEvents(entry: Entry): void {
     state.editorIsNew = false;
     state.view = "entry-view";
     render();
+    if (xpNotes.some((n) => n.includes("進化") || n.includes("升級"))) {
+      void playEvolveFx(getWalkerElement());
+    }
     if (xpNotes.length) showToast(`${xpNotes.join(" · ")} · 已儲存`);
     else showToast("已儲存");
   });

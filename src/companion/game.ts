@@ -2,11 +2,13 @@ import type {
   AdventurerClass,
   CompanionState,
   CompanionWeapon,
+  DigitalPath,
   DigitalSpecies,
   EntryType,
   WeaponRarity,
 } from "../types";
 import { uid } from "../utils";
+import { baseSpriteKey } from "./sprites";
 
 export const JOURNAL_XP: Record<EntryType, number> = {
   diary: 30,
@@ -26,26 +28,98 @@ export const DIGITAL_LABELS: Record<DigitalSpecies, string> = {
   leaf: "葉系",
 };
 
-export const STAGE_LABELS = ["數碼蛋", "幼年期", "成長期", "成熟期", "完全體"];
-
-const WEAPON_POOL: Record<AdventurerClass, string[]> = {
-  knight: ["木劍", "短劍", "長劍", "塔盾", "騎士矛", "細劍", "重盾"],
-  mage: ["木杖", "水晶杖", "魔導書", "符文短杖", "星塵杖", "秘法珠"],
-  hunter: ["短弓", "長弓", "獵刀", "投石器", "風羽弓", "陷阱包"],
+export const DIGITAL_PATH_LABELS: Record<DigitalSpecies, { a: string; b: string }> = {
+  ember: { a: "炎帝線", b: "燄翼線" },
+  tide: { a: "深潮線", b: "風暴線" },
+  leaf: { a: "翠林線", b: "荊棘線" },
 };
 
-const MONSTERS = [
-  "波利",
-  "綠棉蟲",
-  "瘋兔",
-  "小惡魔",
-  "漂浮獸",
-  "腐屍",
-  "赤蠅",
-  "蜂兵",
-  "獸人戰士",
-  "幽靈",
+export const STAGE_LABELS = ["數碼蛋", "幼年期", "成長期", "成熟期", "完全體"];
+
+export interface MonsterDef {
+  name: string;
+  sprite: string;
+  tier: 1 | 2 | 3;
+}
+
+export const MONSTERS: MonsterDef[] = [
+  { name: "波利", sprite: "mob-slime", tier: 1 },
+  { name: "綠棉蟲", sprite: "mob-bug", tier: 1 },
+  { name: "瘋兔", sprite: "mob-bunny", tier: 1 },
+  { name: "小惡魔", sprite: "mob-demon", tier: 1 },
+  { name: "漂浮獸", sprite: "mob-ghost", tier: 1 },
+  { name: "腐屍", sprite: "mob-beast", tier: 1 },
+  { name: "赤蠅", sprite: "mob-bug", tier: 1 },
+  { name: "蜂兵", sprite: "mob-bug", tier: 1 },
+  { name: "土人", sprite: "mob-beast", tier: 1 },
+  { name: "蛇女", sprite: "mob-beast", tier: 2 },
+  { name: "獸人戰士", sprite: "mob-beast", tier: 2 },
+  { name: "幽靈", sprite: "mob-ghost", tier: 2 },
+  { name: "邪骸浪人", sprite: "mob-beast", tier: 2 },
+  { name: "赤蛇", sprite: "mob-beast", tier: 2 },
+  { name: "殭屍", sprite: "mob-beast", tier: 2 },
+  { name: "鬼火", sprite: "mob-ghost", tier: 2 },
+  { name: "米諾斯", sprite: "mob-beast", tier: 3 },
+  { name: "獸人酋長", sprite: "mob-beast", tier: 3 },
+  { name: "德古拉", sprite: "mob-demon", tier: 3 },
+  { name: "巴風特", sprite: "mob-demon", tier: 3 },
+  { name: "幼龍", sprite: "mob-dragon", tier: 3 },
+  { name: "冰波利", sprite: "mob-slime", tier: 1 },
+  { name: "毒蘑菇", sprite: "mob-bug", tier: 1 },
+  { name: "沙漠之狼", sprite: "mob-beast", tier: 2 },
+  { name: "虎王", sprite: "mob-beast", tier: 3 },
 ];
+
+const WEAPON_POOL: Record<AdventurerClass, string[]> = {
+  knight: [
+    "木劍",
+    "短劍",
+    "長劍",
+    "細劍",
+    "塔盾",
+    "重盾",
+    "騎士矛",
+    "闊劍",
+    "雙手劍",
+    "聖十字",
+    "合金盾",
+    "符文刃",
+    "龍鱗盾",
+    "光之劍",
+  ],
+  mage: [
+    "木杖",
+    "水晶杖",
+    "魔導書",
+    "符文短杖",
+    "星塵杖",
+    "秘法珠",
+    "元素珠",
+    "閃電杖",
+    "冰霜書",
+    "烈焰杖",
+    "虛空球",
+    "時之杖",
+    "賢者之書",
+    "星辰法球",
+  ],
+  hunter: [
+    "短弓",
+    "長弓",
+    "獵刀",
+    "投石器",
+    "風羽弓",
+    "陷阱包",
+    "連弩",
+    "毒箭袋",
+    "鷹眼弓",
+    "獸牙匕首",
+    "銀箭",
+    "複合弓",
+    "狼牙飾",
+    "獵王弓",
+  ],
+};
 
 export function defaultCompanion(): CompanionState {
   return {
@@ -74,20 +148,20 @@ export function normalizeCompanion(raw?: Partial<CompanionState> | null): Compan
     ...base,
     ...raw,
     weapons: raw.weapons ?? [],
-    battleLog: raw.battleLog?.slice(-8) ?? [],
+    battleLog: raw.battleLog?.slice(-10) ?? [],
     xpToNext: raw.xpToNext ?? xpNeededForLevel(raw.level ?? 1),
   };
 }
 
 function rarityRoll(level: number): WeaponRarity {
   const roll = Math.random();
-  if (level >= 10 && roll < 0.12) return "epic";
-  if (level >= 5 && roll < 0.35) return "rare";
+  if (level >= 12 && roll < 0.1) return "epic";
+  if (level >= 6 && roll < 0.32) return "rare";
   return "common";
 }
 
 function atkForRarity(rarity: WeaponRarity, level: number): number {
-  const base = rarity === "epic" ? 14 : rarity === "rare" ? 8 : 4;
+  const base = rarity === "epic" ? 16 : rarity === "rare" ? 9 : 4;
   return base + Math.floor(level / 2);
 }
 
@@ -118,11 +192,17 @@ function equippedAtk(c: CompanionState): number {
 function pushLog(c: CompanionState, line: string): void {
   const log = c.battleLog ?? [];
   log.push(line);
-  c.battleLog = log.slice(-8);
+  c.battleLog = log.slice(-10);
 }
 
-function applyLevelUps(c: CompanionState): string[] {
+export interface LevelUpResult {
+  notes: string[];
+  evolved: boolean;
+}
+
+function applyLevelUps(c: CompanionState): LevelUpResult {
   const notes: string[] = [];
+  let evolved = false;
   while (c.xp >= c.xpToNext) {
     c.xp -= c.xpToNext;
     c.level += 1;
@@ -135,6 +215,7 @@ function applyLevelUps(c: CompanionState): string[] {
       const nextStage = stageForLevel(c.level);
       if (nextStage > c.stage) {
         c.stage = nextStage;
+        evolved = true;
         notes.push(`進化為 ${STAGE_LABELS[c.stage]}！`);
       }
     }
@@ -142,9 +223,10 @@ function applyLevelUps(c: CompanionState): string[] {
     if (c.mode === "adventurer" && c.adventurerClass === "hunter" && c.level >= 5 && !c.hasWolf) {
       c.hasWolf = true;
       notes.push("獵人的狼夥伴加入了！");
+      evolved = true;
     }
   }
-  return notes;
+  return { notes, evolved };
 }
 
 export function stageForLevel(level: number): number {
@@ -155,12 +237,24 @@ export function stageForLevel(level: number): number {
   return 0;
 }
 
+export function needsDigitalPathChoice(c: CompanionState): boolean {
+  return c.mode === "digital" && c.stage >= 2 && !c.digitalPath;
+}
+
+export function setDigitalPath(c: CompanionState, path: DigitalPath): string[] {
+  if (c.mode !== "digital" || !c.digitalSpecies) return [];
+  c.digitalPath = path;
+  const label = DIGITAL_PATH_LABELS[c.digitalSpecies][path];
+  pushLog(c, `選擇進化分支：${label}`);
+  return [`進化分支：${label}`];
+}
+
 export function grantJournalXp(c: CompanionState, amount: number, reason: string): string[] {
   if (c.mode === "none" || amount <= 0) return [];
   c.xp += amount;
   c.journalXpTotal += amount;
   pushLog(c, `${reason} +${amount} XP`);
-  return applyLevelUps(c);
+  return applyLevelUps(c).notes;
 }
 
 export function startAdventurer(_current: CompanionState, cls: AdventurerClass): CompanionState {
@@ -184,7 +278,7 @@ export function startDigital(_current: CompanionState, species: DigitalSpecies):
   next.stage = 0;
   next.hp = 25;
   next.maxHp = 25;
-  pushLog(next, `${DIGITAL_LABELS[species]} 數碼蛋開始 incubate…`);
+  pushLog(next, `${DIGITAL_LABELS[species]} 數碼蛋開始孵化…`);
   return next;
 }
 
@@ -193,27 +287,38 @@ export function hatchDigitalEgg(c: CompanionState): string[] {
   c.stage = 1;
   c.xp += 20;
   pushLog(c, "蛋孵化了！進入幼年期");
-  return applyLevelUps(c);
+  return applyLevelUps(c).notes;
+}
+
+function pickMonster(level: number): MonsterDef {
+  const maxTier = level >= 14 ? 3 : level >= 7 ? 2 : 1;
+  const pool = MONSTERS.filter((m) => m.tier <= maxTier);
+  return pool[Math.floor(Math.random() * pool.length)] ?? MONSTERS[0];
 }
 
 export interface BattleResult {
   notes: string[];
   weapon?: CompanionWeapon;
+  monster: MonsterDef;
+  win: boolean;
+  evolved: boolean;
 }
 
 export function runBattle(c: CompanionState): BattleResult {
-  if (c.mode === "none") return { notes: ["請先選擇夥伴模式"] };
+  const monster = pickMonster(c.level);
+  if (c.mode === "none") {
+    return { notes: ["請先選擇夥伴模式"], monster, win: false, evolved: false };
+  }
   if (c.mode === "digital" && c.stage === 0) {
-    return { notes: ["數碼蛋還在孵化，寫日記或按「孵化」加速成長"] };
+    return { notes: ["數碼蛋還在孵化，寫日記或按「孵化」加速成長"], monster, win: false, evolved: false };
   }
 
   const now = Date.now();
-  if (c.lastBattleAt && now - c.lastBattleAt < 8000) {
-    return { notes: ["夥伴需要休息，稍後再戰"] };
+  if (c.lastBattleAt && now - c.lastBattleAt < 6000) {
+    return { notes: ["夥伴需要休息，稍後再戰"], monster, win: false, evolved: false };
   }
   c.lastBattleAt = now;
 
-  const monster = MONSTERS[Math.floor(Math.random() * MONSTERS.length)];
   const notes: string[] = [];
   let power = c.level * 5 + equippedAtk(c);
 
@@ -222,34 +327,38 @@ export function runBattle(c: CompanionState): BattleResult {
     if (c.adventurerClass === "hunter" && c.hasWolf) power += 6;
   } else if (c.mode === "digital") {
     power += c.stage * 4 + 3;
+    if (c.digitalPath === "b") power += 2;
   }
 
-  const foeHp = 12 + c.level * 4 + Math.floor(Math.random() * 10);
-  const win = power + Math.floor(Math.random() * 10) >= foeHp * 0.55;
+  const foeHp = 10 + monster.tier * 8 + c.level * 3 + Math.floor(Math.random() * 8);
+  const win = power + Math.floor(Math.random() * 12) >= foeHp * 0.52;
+  let evolved = false;
 
   if (win) {
     c.battlesWon += 1;
-    const xpGain = 18 + Math.floor(Math.random() * 22) + c.stage;
+    const xpGain = 16 + Math.floor(Math.random() * 24) + c.stage + monster.tier * 2;
     c.xp += xpGain;
-    pushLog(c, `打倒 ${monster}！+${xpGain} XP`);
-    notes.push(`打倒 ${monster}！`);
-    notes.push(...applyLevelUps(c));
+    pushLog(c, `打倒 ${monster.name}！+${xpGain} XP`);
+    notes.push(`打倒 ${monster.name}！`);
+    const levelUp = applyLevelUps(c);
+    notes.push(...levelUp.notes);
+    evolved = levelUp.evolved;
 
-    if (c.mode === "adventurer" && c.adventurerClass && Math.random() < 0.28) {
+    if (c.mode === "adventurer" && c.adventurerClass && Math.random() < 0.3) {
       const weapon = rollWeapon(c.adventurerClass, c.level);
       c.weapons.unshift(weapon);
-      if (c.weapons.length > 12) c.weapons = c.weapons.slice(0, 12);
+      if (c.weapons.length > 16) c.weapons = c.weapons.slice(0, 16);
       notes.push(`獲得武器：${weapon.name}（${weapon.rarity}）`);
       pushLog(c, `獲得 ${weapon.name}`);
-      return { notes, weapon };
+      return { notes, weapon, monster, win, evolved };
     }
   } else {
     c.hp = Math.max(1, c.hp - 4);
-    pushLog(c, `${monster} 逃走了，HP -4`);
-    notes.push(`${monster} 太強了，下次再來`);
+    pushLog(c, `${monster.name} 逃走了，HP -4`);
+    notes.push(`${monster.name} 太強了，下次再來`);
   }
 
-  return { notes };
+  return { notes, monster, win, evolved };
 }
 
 export function equipWeapon(c: CompanionState, weaponId: string): boolean {
@@ -264,60 +373,16 @@ export function companionTitle(c: CompanionState): string {
     return `${ADVENTURER_LABELS[c.adventurerClass]} Lv.${c.level}`;
   }
   if (c.mode === "digital" && c.digitalSpecies) {
-    return `${DIGITAL_LABELS[c.digitalSpecies]} · ${STAGE_LABELS[c.stage] ?? "蛋"} Lv.${c.level}`;
+    let branch = "";
+    if (c.stage >= 3 && c.digitalPath) {
+      branch = ` · ${DIGITAL_PATH_LABELS[c.digitalSpecies][c.digitalPath]}`;
+    }
+    return `${DIGITAL_LABELS[c.digitalSpecies]} · ${STAGE_LABELS[c.stage] ?? "蛋"} Lv.${c.level}${branch}`;
   }
   return `夥伴 Lv.${c.level}`;
 }
 
+/** @deprecated use baseSpriteKey from sprites.ts */
 export function spriteKey(c: CompanionState): string {
-  if (c.mode === "none") return "none";
-  if (c.mode === "adventurer" && c.adventurerClass) {
-    const tier = c.level >= 15 ? 3 : c.level >= 8 ? 2 : 1;
-    return `adv-${c.adventurerClass}-${tier}${c.adventurerClass === "hunter" && c.hasWolf ? "-wolf" : ""}`;
-  }
-  if (c.mode === "digital" && c.digitalSpecies) {
-    return `dig-${c.digitalSpecies}-${c.stage}`;
-  }
-  return "none";
+  return baseSpriteKey(c);
 }
-
-/** 8×10 pixel art color grids (original designs, not copied assets) */
-export const SPRITE_GRIDS: Record<string, string[]> = {
-  "adv-knight-1": ["..SSSS..", ".SSSSSS.", "SSSSSSSS", "..OOOO..", ".OSSSOO.", ".OSSSOO.", "..OO.OO.", "..OO..OO", ".OO...OO", "OO....OO"],
-  "adv-knight-2": ["..SSSS..", ".SSSSSS.", "SSSSSSSS", "..OOOO..", ".OSSSOO.", ".OSSSOO.", "..OO.OO.", "..OO..OO", ".OO...OO", "OO....OO"],
-  "adv-knight-3": ["..SSSS..", ".SSSSSS.", "SSSSSSSS", "..OOOO..", ".OSSSOO.", ".OSSSOO.", "..OO.OO.", "..OO..OO", ".OO...OO", "OO....OO"],
-  "adv-mage-1": ["...PP...", "..PPPP..", ".PPPPPP.", "..OOOO..", ".OOPPOO.", "..OPPO..", "..OO.OO.", "...OO...", "..OO.OO.", ".OO...OO"],
-  "adv-mage-2": ["...PP...", "..PPPP..", ".PPPPPP.", "..OOOO..", ".OOPPOO.", "..OPPO..", "..OO.OO.", "...OO...", "..OO.OO.", ".OO...OO"],
-  "adv-mage-3": ["...VV...", "..VVVV..", ".VVVVVV.", "..OOOO..", ".OOVVOO.", "..OVVO..", "..OO.OO.", "...OO...", "..OO.OO.", ".OO...OO"],
-  "adv-hunter-1": ["...GG...", "..GGGG..", ".GGGGGG.", "..OOOO..", ".OOGGOO.", "..OGGO..", "..OO.OO.", "..OO..OO", ".OO...OO", "OO....OO"],
-  "adv-hunter-2": ["...GG...", "..GGGG..", ".GGGGGG.", "..OOOO..", ".OOGGOO.", "..OGGO..", "..OO.OO.", "..OO..OO", ".OO...OO", "OO....OO"],
-  "adv-hunter-2-wolf": ["...GG...", "..GGGG..", ".GGGGGG.", "..OOOO..", ".OOGGOO.", "..OGGO..", "..OO.OO.", "..OO..OO", ".OO...OO", "OO....OO"],
-  "adv-hunter-3-wolf": ["...GG...", "..GGGG..", ".GGGGGG.", "..OOOO..", ".OOGGOO.", "..OGGO..", "..OO.OO.", "..OO..OO", ".OO...OO", "OO....OO"],
-  "adv-hunter-3": ["...GG...", "..GGGG..", ".GGGGGG.", "..OOOO..", ".OOGGOO.", "..OGGO..", "..OO.OO.", "..OO..OO", ".OO...OO", "OO....OO"],
-  "dig-ember-0": ["...RR...", "..RRRR..", ".RRRRRR.", ".RRRRRR.", "..RRRR..", "...RR...", "........", "........", "........", "........"],
-  "dig-ember-1": ["...RR...", "..RRRR..", ".RRRRRR.", "..OOOO..", ".ORRROO.", "..ORRO..", "..OO.OO.", "...OO...", "..OO.OO.", ".OO...OO"],
-  "dig-ember-2": ["..RRRR..", ".RRRRRR.", "RRRRRRRR", "..OOOO..", ".ORRROO.", "..ORRO..", "..OO.OO.", "..OO..OO", ".OO...OO", "OO....OO"],
-  "dig-ember-3": ["..RRRR..", ".RRRRRR.", "RRRRRRRR", "..OOOO..", ".ORRROO.", ".ORRROO.", "..OO.OO.", "..OO..OO", ".OO...OO", "OO....OO"],
-  "dig-ember-4": [".RRRRRR.", "RRRRRRRR", "RRRRRRRR", "..OOOO..", ".ORRROO.", ".ORRROO.", "..OO.OO.", "..OO..OO", ".OO...OO", "OO....OO"],
-  "dig-tide-0": ["...BB...", "..BBBB..", ".BBBBBB.", ".BBBBBB.", "..BBBB..", "...BB...", "........", "........", "........", "........"],
-  "dig-tide-1": ["...BB...", "..BBBB..", ".BBBBBB.", "..OOOO..", ".OBBBOO.", "..OBBO..", "..OO.OO.", "...OO...", "..OO.OO.", ".OO...OO"],
-  "dig-tide-2": ["..BBBB..", ".BBBBBB.", "BBBBBBBB", "..OOOO..", ".OBBBOO.", "..OBBO..", "..OO.OO.", "..OO..OO", ".OO...OO", "OO....OO"],
-  "dig-tide-3": ["..BBBB..", ".BBBBBB.", "BBBBBBBB", "..OOOO..", ".OBBBOO.", ".OBBBOO.", "..OO.OO.", "..OO..OO", ".OO...OO", "OO....OO"],
-  "dig-tide-4": [".BBBBBB.", "BBBBBBBB", "BBBBBBBB", "..OOOO..", ".OBBBOO.", ".OBBBOO.", "..OO.OO.", "..OO..OO", ".OO...OO", "OO....OO"],
-  "dig-leaf-0": ["...GG...", "..GGGG..", ".GGGGGG.", ".GGGGGG.", "..GGGG..", "...GG...", "........", "........", "........", "........"],
-  "dig-leaf-1": ["...GG...", "..GGGG..", ".GGGGGG.", "..OOOO..", ".OGGGOO.", "..OGGO..", "..OO.OO.", "...OO...", "..OO.OO.", ".OO...OO"],
-  "dig-leaf-2": ["..GGGG..", ".GGGGGG.", "GGGGGGGG", "..OOOO..", ".OGGGOO.", "..OGGO..", "..OO.OO.", "..OO..OO", ".OO...OO", "OO....OO"],
-  "dig-leaf-3": ["..GGGG..", ".GGGGGG.", "GGGGGGGG", "..OOOO..", ".OGGGOO.", ".OGGGOO.", "..OO.OO.", "..OO..OO", ".OO...OO", "OO....OO"],
-  "dig-leaf-4": [".GGGGGG.", "GGGGGGGG", "GGGGGGGG", "..OOOO..", ".OGGGOO.", ".OGGGOO.", "..OO.OO.", "..OO..OO", ".OO...OO", "OO....OO"],
-};
-
-export const SPRITE_COLORS: Record<string, string> = {
-  ".": "transparent",
-  S: "#8a9bab",
-  O: "#f5dcc8",
-  P: "#7b6cf6",
-  V: "#b48cff",
-  G: "#6fa86f",
-  R: "#e85d4c",
-  B: "#4a9fd4",
-};

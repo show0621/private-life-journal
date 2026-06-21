@@ -100,6 +100,8 @@ export type AdventurerClass = "knight" | "mage" | "hunter";
 
 export type DigitalSpecies = "ember" | "tide" | "leaf";
 
+export type DigitalPath = "a" | "b";
+
 export type WeaponRarity = "common" | "rare" | "epic";
 
 
@@ -127,6 +129,8 @@ export interface CompanionState {
   adventurerClass?: AdventurerClass;
 
   digitalSpecies?: DigitalSpecies;
+
+  digitalPath?: DigitalPath;
 
   level: number;
 
