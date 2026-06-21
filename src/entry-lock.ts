@@ -1,5 +1,3 @@
-import type { EntryPrivacy } from "./types";
-
 export async function hashEntryPin(entryId: string, pin: string): Promise<string> {
   const data = new TextEncoder().encode(`${entryId}:${pin}`);
   const hash = await crypto.subtle.digest("SHA-256", data);

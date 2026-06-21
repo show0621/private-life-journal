@@ -456,7 +456,7 @@ function renderList(): string {
   `;
 }
 
-function renderEntryUnlock(entry: Entry): string {
+function renderEntryUnlock(_entry: Entry): string {
   return `
     <div class="auth-screen">
       <div class="panel">

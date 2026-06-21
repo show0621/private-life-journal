@@ -12,7 +12,7 @@ export default defineConfig({
       manifest: {
         name: "The Hideaway",
         short_name: "Hideaway",
-        description: "你的私密日記與筆記角落",
+        description: "The Hideaway — your private journal",
         theme_color: "#f5f0e8",
         background_color: "#f5f0e8",
         display: "standalone",
@@ -30,6 +30,9 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,svg,woff2}"],
+        cleanupOutdatedCaches: true,
+        skipWaiting: true,
+        clientsClaim: true,
       },
     }),
   ],
