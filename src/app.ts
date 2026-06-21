@@ -13,10 +13,13 @@ import { bindRichEditor, getRichContent, renderRichToolbar } from "./rich-editor
 import { clearVault, hasVault, loadVault, saveVault } from "./storage";
 import { scrollInputIntoView } from "./mobile";
 import {
-  formatReaderScale,
+  formatReaderFontSize,
   loadReaderPreferences,
+  MAX_READ_FONT,
+  MIN_READ_FONT,
   saveReaderPreferences,
-  stepReaderScale,
+  setReaderFontSize,
+  stepReaderFontSize,
 } from "./reader-prefs";
 import {
   hidePrivacyShield,
@@ -829,7 +832,7 @@ function renderEntryView(entry: Entry): string {
   const tags = (entry.tags ?? [])
     .map((tag) => `<span class="entry-tag">#${escapeHtml(tag)}</span>`)
     .join("");
-  const readScale = loadReaderPreferences().fontScale;
+  const readFontSize = loadReaderPreferences().fontSize;
 
   return `
     <div class="entry-view-screen">
@@ -840,10 +843,22 @@ function renderEntryView(entry: Entry): string {
       </div>
 
       <div class="read-controls line-card">
-        <span class="read-controls-label">閱讀字級</span>
+        <div class="read-controls-head">
+          <span class="read-controls-label">閱讀字級</span>
+          <span class="read-font-label" id="read-font-label">${formatReaderFontSize(readFontSize)}</span>
+        </div>
+        <input
+          type="range"
+          class="read-font-slider"
+          id="read-font-slider"
+          min="${MIN_READ_FONT}"
+          max="${MAX_READ_FONT}"
+          step="1"
+          value="${readFontSize}"
+          aria-label="閱讀字級滑桿"
+        />
         <div class="read-controls-buttons">
           <button type="button" class="read-size-btn" id="btn-read-smaller" aria-label="縮小字級">A−</button>
-          <span class="read-scale-label" id="read-scale-label">${formatReaderScale(readScale)}</span>
           <button type="button" class="read-size-btn" id="btn-read-larger" aria-label="放大字級">A＋</button>
         </div>
       </div>
@@ -991,7 +1006,7 @@ function renderSettings(): string {
       <div class="entry-list">
         <section class="entry-card">
           <h3>閱讀與隱私</h3>
-          <p>閱讀時可用 A− / A＋ 調整字級。遮罩會立刻隱藏畫面內容，避免旁人看到。</p>
+          <p>閱讀時可用滑桿或 A− / A＋ 自由調整字級（${MIN_READ_FONT}px～${MAX_READ_FONT}px）。遮罩會立刻隱藏畫面內容，避免旁人看到。</p>
           <label class="inline-check" style="margin-top:12px;">
             <input type="checkbox" id="auto-privacy-shield" ${loadReaderPreferences().autoPrivacyShield ? "checked" : ""} />
             離開 App 或切換畫面時自動遮罩
@@ -1204,21 +1219,28 @@ function bindEntryViewEvents(entry: Entry): void {
     openEntryEditor(entry.id);
   });
 
-  const updateScaleLabel = (): void => {
-    const label = document.getElementById("read-scale-label");
-    if (label) label.textContent = formatReaderScale(loadReaderPreferences().fontScale);
+  const updateFontLabel = (size: number): void => {
+    const label = document.getElementById("read-font-label");
+    if (label) label.textContent = formatReaderFontSize(size);
+    const slider = document.getElementById("read-font-slider") as HTMLInputElement | null;
+    if (slider) slider.value = String(size);
   };
+
+  document.getElementById("read-font-slider")!.addEventListener("input", () => {
+    touchActivity();
+    const slider = document.getElementById("read-font-slider") as HTMLInputElement;
+    const size = setReaderFontSize(Number(slider.value));
+    updateFontLabel(size);
+  });
 
   document.getElementById("btn-read-smaller")!.addEventListener("click", () => {
     touchActivity();
-    stepReaderScale(-1);
-    updateScaleLabel();
+    updateFontLabel(stepReaderFontSize(-1));
   });
 
   document.getElementById("btn-read-larger")!.addEventListener("click", () => {
     touchActivity();
-    stepReaderScale(1);
-    updateScaleLabel();
+    updateFontLabel(stepReaderFontSize(1));
   });
 }
 

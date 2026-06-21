@@ -97,7 +97,7 @@
 :root {
   --radius: 10px;
   --radius-sm: 6px;
-  --read-scale: 0.88;
+  --read-font-size: 13px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
@@ -961,12 +961,17 @@ body::after {
 .entry-view-top-actions #btn-view-edit { justify-self: end; }
 
 .read-controls {
+  display: grid;
+  gap: 10px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+}
+
+.read-controls-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 16px;
-  margin-bottom: 12px;
 }
 
 .read-controls-label {
@@ -975,10 +980,16 @@ body::after {
   color: var(--text-muted);
 }
 
+.read-font-slider {
+  width: 100%;
+  accent-color: var(--accent-strong);
+}
+
 .read-controls-buttons {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  gap: 12px;
 }
 
 .read-size-btn {
@@ -991,11 +1002,12 @@ body::after {
   font-size: 0.92rem;
 }
 
-.read-scale-label {
+.read-font-label {
   min-width: 44px;
-  text-align: center;
+  text-align: right;
   font-size: 0.82rem;
   color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .entry-view {
@@ -1015,7 +1027,7 @@ body::after {
 .entry-view-title {
   margin: 0 0 10px;
   font-family: var(--font-serif);
-  font-size: calc(1.28rem * var(--read-scale));
+  font-size: calc(var(--read-font-size) * 1.22);
   font-weight: 600;
   line-height: 1.45;
 }
@@ -1032,12 +1044,36 @@ body::after {
 .entry-readonly {
   min-height: auto;
   padding: 0;
-  font-size: calc(0.94rem * var(--read-scale));
-  line-height: 1.8;
+  font-size: var(--read-font-size);
+  line-height: 1.85;
   user-select: text;
   -webkit-user-select: text;
   pointer-events: auto;
 }
+
+.entry-readonly p,
+.entry-readonly li,
+.entry-readonly blockquote,
+.entry-readonly div {
+  font-size: 1em;
+  line-height: inherit;
+}
+
+.entry-readonly h2 {
+  font-size: 1.35em;
+  line-height: 1.4;
+}
+
+.entry-readonly h3 {
+  font-size: 1.15em;
+  line-height: 1.45;
+}
+
+.entry-readonly [style*="font-size"] {
+  font-size: inherit !important;
+}
+
+.entry-readonly:focus { outline: none; }
 
 .privacy-shield {
   position: fixed;

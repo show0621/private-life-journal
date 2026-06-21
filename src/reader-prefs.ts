@@ -1,15 +1,15 @@
 export interface ReaderPreferences {
-  fontScale: number;
+  fontSize: number;
   autoPrivacyShield: boolean;
 }
 
 const STORAGE_KEY = "life-journal-reader";
-const MIN_SCALE = 0.8;
-const MAX_SCALE = 1.2;
-const SCALE_STEP = 0.05;
+export const MIN_READ_FONT = 11;
+export const MAX_READ_FONT = 26;
+const FONT_STEP = 1;
 
 export const DEFAULT_READER: ReaderPreferences = {
-  fontScale: 0.88,
+  fontSize: 13,
   autoPrivacyShield: true,
 };
 
@@ -17,10 +17,13 @@ export function loadReaderPreferences(): ReaderPreferences {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...DEFAULT_READER };
-    const parsed = JSON.parse(raw) as Partial<ReaderPreferences>;
-    const fontScale = clampScale(parsed.fontScale ?? DEFAULT_READER.fontScale);
+    const parsed = JSON.parse(raw) as Partial<ReaderPreferences> & { fontScale?: number };
+    const fontSize = clampFontSize(
+      parsed.fontSize ??
+        (parsed.fontScale != null ? Math.round(15 * parsed.fontScale) : DEFAULT_READER.fontSize)
+    );
     return {
-      fontScale,
+      fontSize,
       autoPrivacyShield: parsed.autoPrivacyShield ?? DEFAULT_READER.autoPrivacyShield,
     };
   } catch {
@@ -29,33 +32,35 @@ export function loadReaderPreferences(): ReaderPreferences {
 }
 
 export function saveReaderPreferences(prefs: ReaderPreferences): void {
-  localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify({
-      fontScale: clampScale(prefs.fontScale),
-      autoPrivacyShield: prefs.autoPrivacyShield,
-    })
-  );
-  applyReaderScale(prefs.fontScale);
+  const next = {
+    fontSize: clampFontSize(prefs.fontSize),
+    autoPrivacyShield: prefs.autoPrivacyShield,
+  };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  applyReaderFontSize(next.fontSize);
 }
 
-function clampScale(value: number): number {
-  const stepped = Math.round(value / SCALE_STEP) * SCALE_STEP;
-  return Math.min(MAX_SCALE, Math.max(MIN_SCALE, stepped));
+function clampFontSize(value: number): number {
+  const rounded = Math.round(value);
+  return Math.min(MAX_READ_FONT, Math.max(MIN_READ_FONT, rounded));
 }
 
-export function applyReaderScale(scale?: number): void {
-  const value = clampScale(scale ?? loadReaderPreferences().fontScale);
-  document.documentElement.style.setProperty("--read-scale", String(value));
+export function applyReaderFontSize(size?: number): void {
+  const value = clampFontSize(size ?? loadReaderPreferences().fontSize);
+  document.documentElement.style.setProperty("--read-font-size", `${value}px`);
 }
 
-export function stepReaderScale(delta: number): number {
+export function setReaderFontSize(size: number): number {
   const prefs = loadReaderPreferences();
-  prefs.fontScale = clampScale(prefs.fontScale + delta * SCALE_STEP);
+  prefs.fontSize = clampFontSize(size);
   saveReaderPreferences(prefs);
-  return prefs.fontScale;
+  return prefs.fontSize;
 }
 
-export function formatReaderScale(scale: number): string {
-  return `${Math.round(scale * 100)}%`;
+export function stepReaderFontSize(delta: number): number {
+  return setReaderFontSize(loadReaderPreferences().fontSize + delta * FONT_STEP);
+}
+
+export function formatReaderFontSize(size: number): string {
+  return `${size}px`;
 }
