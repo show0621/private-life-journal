@@ -933,6 +933,65 @@ body::after {
 
 .empty-state.compact { padding: 28px 16px; }
 
+.entry-view-screen {
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 16px max(16px, var(--safe-left)) calc(16px + var(--safe-bottom)) max(16px, var(--safe-right));
+}
+
+.entry-view-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.entry-view-top .btn { flex: 1; }
+
+.entry-view {
+  padding: 20px 18px;
+}
+
+.entry-view-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.entry-view-icons { font-size: 0.92rem; }
+
+.entry-view-title {
+  margin: 0 0 10px;
+  font-family: var(--font-serif);
+  font-size: 1.55rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.entry-view-date {
+  margin: 0 0 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border-light);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+}
+
+.entry-readonly {
+  min-height: auto;
+  padding: 0;
+  user-select: text;
+  -webkit-user-select: text;
+  pointer-events: auto;
+}
+
+.entry-readonly:focus { outline: none; }
+
 .editor-toolbar {
   display: flex;
   align-items: center;

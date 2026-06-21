@@ -7,7 +7,7 @@ import {
   verifyPassword,
 } from "./crypto";
 import { hashEntryPin, verifyEntryPin } from "./entry-lock";
-import { truncateContent } from "./html";
+import { plainToHtml, sanitizeRichHtml, toPreviewText, truncateContent } from "./html";
 import { loadSyncSettings, saveSyncSettings } from "./preferences";
 import { bindRichEditor, getRichContent, renderRichToolbar } from "./rich-editor";
 import { clearVault, hasVault, loadVault, saveVault } from "./storage";
@@ -49,7 +49,8 @@ import {
 
 const AUTO_LOCK_MS = 5 * 60 * 1000;
 
-type View = "journal" | "calendar" | "todos" | "editor" | "settings" | "entry-unlock";
+type MainView = "journal" | "calendar" | "todos";
+type View = MainView | "entry-view" | "editor" | "settings" | "entry-unlock";
 
 interface AppState {
   unlocked: boolean;
@@ -65,7 +66,9 @@ interface AppState {
   showHidden: boolean;
   unlockedEntryIds: Set<string>;
   view: View;
+  returnView: MainView;
   editingId: string | null;
+  editorIsNew: boolean;
   syncSettings: SyncSettings;
   lastActivity: number;
   calendarYear: number;
@@ -88,7 +91,9 @@ const state: AppState = {
   showHidden: false,
   unlockedEntryIds: new Set(),
   view: "journal",
+  returnView: "journal",
   editingId: null,
+  editorIsNew: false,
   syncSettings: loadSyncSettings(),
   lastActivity: Date.now(),
   calendarYear: now.getFullYear(),
@@ -291,6 +296,49 @@ function badgeClass(type: EntryType): string {
   if (type === "diary") return "badge badge-diary";
   if (type === "note") return "badge badge-note";
   return "badge badge-quick";
+}
+
+function renderEntryBody(entry: Entry): string {
+  if (!entry.content.trim()) {
+    return '<p class="muted-copy">（空白）</p>';
+  }
+  const html =
+    entry.format === "html" || /<[^>]+>/.test(entry.content)
+      ? entry.content
+      : plainToHtml(entry.content);
+  return sanitizeRichHtml(html);
+}
+
+function closeEntry(): void {
+  state.editingId = null;
+  state.editorIsNew = false;
+  state.view = state.returnView;
+  render();
+}
+
+function openEntryView(id: string): void {
+  touchActivity();
+  const entry = getEntry(id);
+  if (!entry) return;
+  if (state.view === "journal" || state.view === "calendar" || state.view === "todos") {
+    state.returnView = state.view;
+  }
+  state.editingId = id;
+  state.editorIsNew = false;
+  if (isEntryLocked(entry) && !isEntryAccessible(entry)) {
+    state.view = "entry-unlock";
+  } else {
+    state.view = "entry-view";
+  }
+  render();
+}
+
+function openEntryEditor(id: string): void {
+  touchActivity();
+  if (!getEntry(id)) return;
+  state.editingId = id;
+  state.view = "editor";
+  render();
 }
 
 function renderEntryCard(entry: Entry): string {
@@ -764,6 +812,32 @@ function renderTodos(): string {
   `;
 }
 
+function renderEntryView(entry: Entry): string {
+  const tags = (entry.tags ?? [])
+    .map((tag) => `<span class="entry-tag">#${escapeHtml(tag)}</span>`)
+    .join("");
+
+  return `
+    <div class="entry-view-screen">
+      <div class="entry-view-top">
+        <button class="btn btn-secondary btn-touch" type="button" id="btn-view-back">← 返回</button>
+        <button class="btn btn-primary btn-touch" type="button" id="btn-view-edit">編輯</button>
+      </div>
+
+      <article class="line-card entry-view">
+        <div class="entry-view-meta">
+          <span class="${badgeClass(entry.type)}">${ENTRY_TYPE_LABELS[entry.type]}</span>
+          <span class="entry-view-icons">${entry.mood ?? ""}${entry.pinned ? " 📌" : ""}${entry.hidden ? " 🙈" : ""}${entry.locked ? " 🔒" : ""}</span>
+        </div>
+        <h1 class="entry-view-title">${escapeHtml(entry.title || "（無標題）")}</h1>
+        ${tags ? `<div class="entry-tags">${tags}</div>` : ""}
+        <p class="entry-view-date">${formatDateTime(entry.updatedAt)}</p>
+        <div class="entry-view-body rich-editor entry-readonly">${renderEntryBody(entry)}</div>
+      </article>
+    </div>
+  `;
+}
+
 function renderEntryUnlock(_entry: Entry): string {
   return `
     <div class="auth-screen">
@@ -1015,6 +1089,17 @@ function render(): void {
     state.editingId = null;
   }
 
+  if (state.view === "entry-view" && state.editingId) {
+    const entry = getEntry(state.editingId);
+    if (entry) {
+      root.innerHTML = renderEntryView(entry);
+      bindEntryViewEvents(entry);
+      return;
+    }
+    state.view = state.returnView;
+    state.editingId = null;
+  }
+
   if (state.view === "settings") {
     root.innerHTML = renderSettings();
     bindSettingsEvents();
@@ -1061,29 +1146,48 @@ function openNew(type: EntryType = "diary"): void {
   };
   upsertEntry(entry);
   state.editingId = entry.id;
+  state.editorIsNew = true;
+  state.returnView = state.view === "journal" || state.view === "calendar" || state.view === "todos" ? state.view : "journal";
   state.view = "editor";
   render();
 }
 
-function openEditor(id: string): void {
-  touchActivity();
-  const entry = getEntry(id);
-  if (!entry) return;
-  state.editingId = id;
-  if (isEntryLocked(entry) && !isEntryAccessible(entry)) {
-    state.view = "entry-unlock";
-  } else {
-    state.view = "editor";
+function bindEntryViewEvents(entry: Entry): void {
+  document.getElementById("btn-view-back")!.addEventListener("click", () => {
+    touchActivity();
+    closeEntry();
+  });
+
+  document.getElementById("btn-view-edit")!.addEventListener("click", () => {
+    openEntryEditor(entry.id);
+  });
+}
+
+function discardNewEntryIfEmpty(entry: Entry): boolean {
+  if (!entry.title.trim() && !toPreviewText(entry.content, entry.format)) {
+    deleteEntry(entry.id);
+    return true;
   }
+  return false;
+}
+
+function exitEditorToViewOrList(entry: Entry): void {
+  if (state.editorIsNew && discardNewEntryIfEmpty(entry)) {
+    state.editingId = null;
+    state.editorIsNew = false;
+    state.view = state.returnView;
+    render();
+    return;
+  }
+  state.editorIsNew = false;
+  state.view = "entry-view";
   render();
 }
 
 function bindEntryUnlockEvents(entry: Entry): void {
   document.getElementById("btn-unlock-back")!.addEventListener("click", () => {
     touchActivity();
-    state.view = "journal";
-    state.editingId = null;
-    render();
+    closeEntry();
   });
 
   document.getElementById("entry-unlock-form")!.addEventListener("submit", async (e) => {
@@ -1102,7 +1206,7 @@ function bindEntryUnlockEvents(entry: Entry): void {
       return;
     }
     state.unlockedEntryIds.add(entry.id);
-    state.view = "editor";
+    state.view = "entry-view";
     render();
   });
 }
@@ -1296,7 +1400,7 @@ function bindTodoEvents(): void {
 function bindEntryCards(): void {
   document.querySelectorAll(".entry-card[data-id]").forEach((card) => {
     card.addEventListener("click", () => {
-      openEditor((card as HTMLElement).dataset.id!);
+      openEntryView((card as HTMLElement).dataset.id!);
     });
   });
 }
@@ -1327,18 +1431,14 @@ function bindEditorEvents(entry: Entry): void {
 
   document.getElementById("btn-back")!.addEventListener("click", () => {
     touchActivity();
-    state.view = "journal";
-    state.editingId = null;
-    render();
+    exitEditorToViewOrList(entry);
   });
 
   document.getElementById("btn-delete")!.addEventListener("click", () => {
     if (!confirm("確定要刪除這則記錄嗎？")) return;
     touchActivity();
     deleteEntry(entry.id);
-    state.view = "journal";
-    state.editingId = null;
-    render();
+    closeEntry();
   });
 
   document.getElementById("entry-locked")!.addEventListener("change", () => {
@@ -1382,8 +1482,8 @@ function bindEditorEvents(entry: Entry): void {
     }
 
     upsertEntry(entry);
-    state.view = "journal";
-    state.editingId = null;
+    state.editorIsNew = false;
+    state.view = "entry-view";
     render();
     showToast("已儲存");
   });
