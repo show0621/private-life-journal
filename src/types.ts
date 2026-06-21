@@ -1,6 +1,7 @@
 export type EntryType = "diary" | "note" | "quick";
 export type ContentFormat = "text" | "html";
 export type ThemeMode = "dark" | "light" | "system";
+export type EntryPrivacy = "normal" | "hidden" | "locked";
 
 export interface Entry {
   id: string;
@@ -10,6 +11,8 @@ export interface Entry {
   format?: ContentFormat;
   tags?: string[];
   mood?: string;
+  privacy?: EntryPrivacy;
+  lockHash?: string;
   createdAt: number;
   updatedAt: number;
   pinned?: boolean;

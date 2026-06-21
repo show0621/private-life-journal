@@ -6,13 +6,14 @@ import {
   restoreBackup,
   verifyPassword,
 } from "./crypto";
+import { hashEntryPin, verifyEntryPin } from "./entry-lock";
 import { truncateContent } from "./html";
 import { loadSyncSettings, saveSyncSettings } from "./preferences";
 import { bindRichEditor, getRichContent, renderRichToolbar } from "./rich-editor";
 import { clearVault, hasVault, loadVault, saveVault } from "./storage";
 import { pullFromCloud, pushToCloud, testCloudConnection } from "./sync";
 import { getResolvedTheme, getStoredTheme, setStoredTheme } from "./theme";
-import type { BackupFile, Entry, EntryType, SyncSettings, ThemeMode } from "./types";
+import type { BackupFile, Entry, EntryPrivacy, EntryType, SyncSettings, ThemeMode } from "./types";
 import { ENTRY_TYPE_LABELS, MOOD_OPTIONS } from "./types";
 import {
   debounce,
@@ -25,7 +26,7 @@ import {
 
 const AUTO_LOCK_MS = 5 * 60 * 1000;
 
-type View = "list" | "editor" | "settings";
+type View = "list" | "editor" | "settings" | "entry-unlock";
 
 interface AppState {
   unlocked: boolean;
@@ -36,6 +37,8 @@ interface AppState {
   filter: EntryType | "all";
   tagFilter: string | null;
   search: string;
+  showHidden: boolean;
+  unlockedEntryIds: Set<string>;
   view: View;
   editingId: string | null;
   syncSettings: SyncSettings;
@@ -50,6 +53,8 @@ const state: AppState = {
   filter: "all",
   tagFilter: null,
   search: "",
+  showHidden: false,
+  unlockedEntryIds: new Set(),
   view: "list",
   editingId: null,
   syncSettings: loadSyncSettings(),
@@ -78,7 +83,13 @@ function lock(): void {
   state.entries = [];
   state.view = "list";
   state.editingId = null;
+  state.unlockedEntryIds.clear();
   render();
+}
+
+function isEntryAccessible(entry: Entry): boolean {
+  if (entry.privacy !== "locked" || !entry.lockHash) return true;
+  return state.unlockedEntryIds.has(entry.id);
 }
 
 async function persist(): Promise<void> {
@@ -136,6 +147,7 @@ function sortedEntries(): Entry[] {
 function filteredEntries(): Entry[] {
   const q = state.search.trim().toLowerCase();
   return sortedEntries().filter((entry) => {
+    if (entry.privacy === "hidden" && !state.showHidden) return false;
     if (state.filter !== "all" && entry.type !== state.filter) return false;
     if (state.tagFilter && !(entry.tags ?? []).includes(state.tagFilter)) return false;
     if (!q) return true;
@@ -173,16 +185,28 @@ function badgeClass(type: EntryType): string {
 }
 
 function renderEntryCard(entry: Entry): string {
+  const isLocked = entry.privacy === "locked" && !!entry.lockHash;
+  const isHidden = entry.privacy === "hidden";
+  const cardClass = [
+    "entry-card",
+    isHidden ? "is-hidden" : "",
+    isLocked ? "is-locked" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return `
-    <button class="entry-card" data-id="${entry.id}">
+    <button class="${cardClass}" data-id="${entry.id}">
       <div class="entry-card-top">
         <span class="${badgeClass(entry.type)}">${ENTRY_TYPE_LABELS[entry.type]}</span>
-        <span>${entry.mood ?? ""}${entry.pinned ? " 📌" : ""}</span>
+        <span>
+          ${isLocked ? "🔒" : ""}${isHidden ? "🙈" : ""}${entry.mood ?? ""}${entry.pinned ? " 📌" : ""}
+        </span>
       </div>
-      <h3>${escapeHtml(entry.title || "（無標題）")}</h3>
-      <p>${escapeHtml(truncateContent(entry.content, entry.format)) || "（空白）"}</p>
+      <h3>${escapeHtml(isLocked ? "已上鎖的記錄" : entry.title || "（無標題）")}</h3>
+      <p>${isLocked ? "需要 PIN 碼才能查看" : escapeHtml(truncateContent(entry.content, entry.format)) || "（空白）"}</p>
       ${
-        (entry.tags ?? []).length
+        (entry.tags ?? []).length && !isLocked
           ? `<div class="entry-tags">${(entry.tags ?? [])
               .map((tag) => `<span class="entry-tag">#${escapeHtml(tag)}</span>`)
               .join("")}</div>`
@@ -300,7 +324,7 @@ function renderSetupForm(): string {
 function renderUnlockForm(): string {
   return `
     <div class="auth-logo">🔒</div>
-    <h1>私密生活筆記</h1>
+    <h1>生活筆記</h1>
     <p>輸入密碼解鎖你的日記、筆記與隨手記。</p>
     <form id="unlock-form">
       <div class="field">
@@ -385,8 +409,9 @@ function renderList(): string {
   return `
     <div class="screen">
       <header class="app-header">
-        <h1>私密生活筆記</h1>
+        <h1>生活筆記</h1>
         <div class="header-actions">
+          <button class="icon-btn ${state.showHidden ? "active" : ""}" id="btn-hidden" title="顯示隱藏項目">🙈</button>
           <button class="icon-btn" id="btn-theme" title="切換主題">${getResolvedTheme() === "light" ? "🌙" : "☀️"}</button>
           <button class="icon-btn" id="btn-settings" title="設定">⚙️</button>
           <button class="icon-btn" id="btn-lock" title="上鎖">🔒</button>
@@ -420,6 +445,28 @@ function renderList(): string {
       </div>
     </div>
     <button class="fab" id="btn-new" title="新增">+</button>
+  `;
+}
+
+function renderEntryUnlock(entry: Entry): string {
+  return `
+    <div class="auth-screen">
+      <div class="panel">
+        <h2>🔒 此記錄已上鎖</h2>
+        <p>輸入這篇記錄的 PIN 碼以查看內容。</p>
+        <form id="entry-unlock-form">
+          <div class="field">
+            <label for="entry-pin">PIN 碼</label>
+            <input id="entry-pin" type="password" inputmode="numeric" autocomplete="off" required placeholder="輸入 PIN" />
+          </div>
+          <p class="error-text" id="entry-unlock-error"></p>
+          <div class="editor-actions">
+            <button type="button" class="btn btn-secondary" id="btn-unlock-back">返回</button>
+            <button type="submit" class="btn btn-primary">解鎖</button>
+          </div>
+        </form>
+      </div>
+    </div>
   `;
 }
 
@@ -472,7 +519,22 @@ function renderEditor(entry: Entry): string {
           <div class="rich-editor" id="entry-content" contenteditable="true"></div>
         </div>
 
-        <label style="display:flex; align-items:center; gap:8px; color:var(--text-muted);">
+        <div class="privacy-row">
+          <div class="field" style="margin:0">
+            <label for="entry-privacy">隱私</label>
+            <select id="entry-privacy">
+              <option value="normal" ${(entry.privacy ?? "normal") === "normal" ? "selected" : ""}>一般</option>
+              <option value="hidden" ${entry.privacy === "hidden" ? "selected" : ""}>隱藏</option>
+              <option value="locked" ${entry.privacy === "locked" ? "selected" : ""}>上鎖</option>
+            </select>
+          </div>
+          <div class="field" style="margin:0">
+            <label for="entry-pin-set">${entry.lockHash ? "變更 PIN" : "設定 PIN（上鎖時）"}</label>
+            <input id="entry-pin-set" type="password" inputmode="numeric" autocomplete="new-password" placeholder="${entry.privacy === "locked" ? "至少 4 碼" : "選上鎖時填寫"}" />
+          </div>
+        </div>
+
+        <label style="display:flex; align-items:center; gap:8px; color:var(--text-muted); font-size:0.92rem;">
           <input type="checkbox" id="entry-pinned" ${entry.pinned ? "checked" : ""} />
           釘選置頂
         </label>
@@ -598,6 +660,17 @@ function render(): void {
     return;
   }
 
+  if (state.view === "entry-unlock" && state.editingId) {
+    const entry = getEntry(state.editingId);
+    if (entry) {
+      root.innerHTML = renderEntryUnlock(entry);
+      bindEntryUnlockEvents(entry);
+      return;
+    }
+    state.view = "list";
+    state.editingId = null;
+  }
+
   if (state.view === "settings") {
     root.innerHTML = renderSettings();
     bindSettingsEvents();
@@ -638,9 +711,44 @@ function openNew(type: EntryType = "diary"): void {
 
 function openEditor(id: string): void {
   touchActivity();
+  const entry = getEntry(id);
+  if (!entry) return;
   state.editingId = id;
-  state.view = "editor";
+  if (entry.privacy === "locked" && entry.lockHash && !isEntryAccessible(entry)) {
+    state.view = "entry-unlock";
+  } else {
+    state.view = "editor";
+  }
   render();
+}
+
+function bindEntryUnlockEvents(entry: Entry): void {
+  document.getElementById("btn-unlock-back")!.addEventListener("click", () => {
+    touchActivity();
+    state.view = "list";
+    state.editingId = null;
+    render();
+  });
+
+  document.getElementById("entry-unlock-form")!.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    touchActivity();
+    const errorEl = document.getElementById("entry-unlock-error")!;
+    errorEl.textContent = "";
+    const pin = (document.getElementById("entry-pin") as HTMLInputElement).value;
+    if (!entry.lockHash) {
+      errorEl.textContent = "此記錄未設定 PIN。";
+      return;
+    }
+    const ok = await verifyEntryPin(entry.id, pin, entry.lockHash);
+    if (!ok) {
+      errorEl.textContent = "PIN 碼錯誤。";
+      return;
+    }
+    state.unlockedEntryIds.add(entry.id);
+    state.view = "editor";
+    render();
+  });
 }
 
 function cycleTheme(): void {
@@ -653,6 +761,11 @@ function cycleTheme(): void {
 
 function bindListEvents(): void {
   document.getElementById("btn-lock")!.addEventListener("click", lock);
+  document.getElementById("btn-hidden")!.addEventListener("click", () => {
+    touchActivity();
+    state.showHidden = !state.showHidden;
+    render();
+  });
   document.getElementById("btn-theme")!.addEventListener("click", cycleTheme);
   document.getElementById("btn-settings")!.addEventListener("click", () => {
     touchActivity();
@@ -746,16 +859,37 @@ function bindEditorEvents(entry: Entry): void {
     render();
   });
 
-  document.getElementById("editor-form")!.addEventListener("submit", (e) => {
+  document.getElementById("editor-form")!.addEventListener("submit", async (e) => {
     e.preventDefault();
     touchActivity();
     const rich = getRichContent(editor);
+    const privacy = (document.getElementById("entry-privacy") as HTMLSelectElement).value as EntryPrivacy;
+    const pinInput = (document.getElementById("entry-pin-set") as HTMLInputElement).value;
+
     entry.title = (document.getElementById("entry-title") as HTMLInputElement).value.trim();
     entry.content = rich.content;
     entry.format = rich.format;
     entry.tags = parseTags((document.getElementById("entry-tags") as HTMLInputElement).value);
     entry.pinned = (document.getElementById("entry-pinned") as HTMLInputElement).checked;
+    entry.privacy = privacy;
     entry.updatedAt = Date.now();
+
+    if (privacy === "locked") {
+      if (pinInput) {
+        if (pinInput.length < 4) {
+          showToast("PIN 至少需要 4 碼");
+          return;
+        }
+        entry.lockHash = await hashEntryPin(entry.id, pinInput);
+      } else if (!entry.lockHash) {
+        showToast("上鎖記錄請設定 PIN");
+        return;
+      }
+    } else {
+      entry.lockHash = undefined;
+      state.unlockedEntryIds.delete(entry.id);
+    }
+
     upsertEntry(entry);
     state.view = "list";
     state.editingId = null;

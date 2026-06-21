@@ -5,7 +5,7 @@ const STORAGE_KEY = "life-journal-theme";
 export function getStoredTheme(): ThemeMode {
   const value = localStorage.getItem(STORAGE_KEY);
   if (value === "light" || value === "dark" || value === "system") return value;
-  return "system";
+  return "light";
 }
 
 export function setStoredTheme(mode: ThemeMode): void {

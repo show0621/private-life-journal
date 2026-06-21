@@ -80,6 +80,7 @@ function normalizeEntry(entry: Entry): Entry {
   return {
     ...entry,
     tags: entry.tags ?? [],
+    privacy: entry.privacy ?? "normal",
     format: entry.format ?? (/<[^>]+>/.test(entry.content) ? "html" : "text"),
   };
 }
