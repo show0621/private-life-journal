@@ -1065,11 +1065,11 @@ function renderEntryUnlock(_entry: Entry): string {
     <div class="auth-screen">
       <div class="panel glass-panel">
         <h2>🔒 此記錄已上鎖</h2>
-        <p>輸入這篇記錄的 PIN 碼以查看內容。</p>
+        <p>輸入這篇記錄的 PIN 碼以查看內容（可含英文）。</p>
         <form id="entry-unlock-form">
           <div class="field">
             <label for="entry-pin">PIN 碼</label>
-            <input id="entry-pin" type="password" inputmode="numeric" autocomplete="off" required placeholder="輸入 PIN" />
+            <input id="entry-pin" ${IOS_MASKED_INPUT} required placeholder="輸入 PIN（可含英文）" enterkeyhint="go" />
           </div>
           <p class="error-text" id="entry-unlock-error"></p>
           <div class="editor-actions">
@@ -1144,7 +1144,7 @@ function renderEditor(entry: Entry): string {
             </div>
             <div class="field entry-pin-field" id="entry-pin-field" style="margin:0;${entry.locked ? "" : "display:none"}">
               <label for="entry-pin-set">${entry.lockHash ? "變更 PIN" : "設定 PIN"}</label>
-              <input id="entry-pin-set" type="password" inputmode="numeric" autocomplete="new-password" placeholder="至少 4 碼" enterkeyhint="done" />
+              <input id="entry-pin-set" ${IOS_MASKED_INPUT} placeholder="至少 4 碼（可含英文）" enterkeyhint="done" />
             </div>
           </div>
 
