@@ -1587,11 +1587,30 @@ section.entry-card p {
 
 /* ── Companion / pixel pet ── */
 .pixel-sprite {
-  --px-size: 3px;
+  --px-size: 2px;
+  --px-cols: 16;
   display: grid;
-  grid-template-columns: repeat(8, var(--px-size));
-  grid-template-rows: repeat(10, var(--px-size));
+  grid-template-columns: repeat(var(--px-cols), var(--px-size));
+  grid-auto-rows: var(--px-size);
   image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.hero-sprite,
+.hero-sprite-wrap .pixel-sprite {
+  --px-size: 3px;
+}
+
+.arena-sprite {
+  --px-size: 3px;
+}
+
+.pick-sprite {
+  --px-size: 2px;
+}
+
+.walker-sprite-wrap .pixel-sprite {
+  --px-size: 2px;
 }
 
 .px-cell {
@@ -1823,7 +1842,7 @@ body.companion-evolve-flash::after {
   margin-bottom: 16px;
 }
 
-.hero-sprite { --px-size: 4px; }
+.hero-sprite { --px-size: 3px; }
 
 .xp-bar {
   height: 6px;

@@ -1,63 +1,46 @@
 import type { CompanionState } from "../types";
+import { RO_ADVENTURER_SPRITES, RO_COLORS } from "./ro-sprites";
 
 export const SPRITE_COLORS: Record<string, string> = {
   ".": "transparent",
-  S: "#8a9bab",
-  O: "#f5dcc8",
-  P: "#7b6cf6",
-  V: "#b48cff",
-  G: "#6fa86f",
-  R: "#e85d4c",
-  B: "#4a9fd4",
-  Y: "#e8c547",
-  K: "#2d3436",
-  M: "#b088ff",
-  C: "#55efc4",
-  W: "#dfe6e9",
-  H: "#636e72",
+  ...RO_COLORS,
 };
 
-const BASE: Record<string, string[]> = {
-  "adv-knight-1": ["..SSSS..", ".SSSSSS.", "SSSSSSSS", "..OOOO..", ".OSSSOO.", ".OSSSOO.", "..OO.OO.", "..OO..OO", ".OO...OO", "OO....OO"],
-  "adv-knight-2": ["..SSSS..", ".SSSSSS.", "SSSSSSSS", "..OOOO..", ".OSSSOO.", ".OSSSOO.", "..OO.OO.", ".OO..OO.", ".OO...OO", "OO....OO"],
-  "adv-knight-3": [".SSSSSS.", "SSSSSSSS", "SSSSSSSS", "..OOOO..", ".OSSSOO.", ".OSSSOO.", "..OO.OO.", ".OO..OO.", ".OO...OO", "OO....OO"],
-  "adv-mage-1": ["...PP...", "..PPPP..", ".PPPPPP.", "..OOOO..", ".OOPPOO.", "..OPPO..", "..OO.OO.", "...OO...", "..OO.OO.", ".OO...OO"],
-  "adv-mage-2": ["...PP...", "..PPPP..", ".PPPPPP.", "..OOOO..", ".OOPPOO.", "..OPPO..", "..OO.OO.", "..OO.OO.", ".OO...OO", ".OO...OO"],
-  "adv-mage-3": ["...VV...", "..VVVV..", ".VVVVVV.", "..OOOO..", ".OOVVOO.", "..OVVO..", "..OO.OO.", "...OO...", "..OO.OO.", ".OO...OO"],
-  "adv-hunter-1": ["...GG...", "..GGGG..", ".GGGGGG.", "..OOOO..", ".OOGGOO.", "..OGGO..", "..OO.OO.", "..OO..OO", ".OO...OO", "OO....OO"],
-  "adv-hunter-2": ["...GG...", "..GGGG..", ".GGGGGG.", "..OOOO..", ".OOGGOO.", "..OGGO..", "..OO.OO.", ".OO..OO.", ".OO...OO", "OO....OO"],
-  "adv-hunter-2-wolf": ["...GG...", "..GGGG..", ".GGGGGG.", "..OOOO..", ".OOGGOO.", "..OGGO..", "..OO.OO.", ".OO..OO.", ".OO...OO", "OO....OO"],
-  "adv-hunter-3": ["...GG...", "..GGGG..", ".GGGGGG.", "..OOOO..", ".OOGGOO.", "..OGGO..", "..OO.OO.", ".OO..OO.", ".OO...OO", "OO....OO"],
-  "adv-hunter-3-wolf": ["...GG...", "..GGGG..", ".GGGGGG.", "..OOOO..", ".OOGGOO.", "..OGGO..", "..OO.OO.", ".OO..OO.", ".OO...OO", "OO....OO"],
-  "dig-ember-0": ["...RR...", "..RRRR..", ".RRRRRR.", ".RRRRRR.", "..RRRR..", "...RR...", "........", "........", "........", "........"],
-  "dig-ember-1": ["...RR...", "..RRRR..", ".RRRRRR.", "..OOOO..", ".ORRROO.", "..ORRO..", "..OO.OO.", "...OO...", "..OO.OO.", ".OO...OO"],
-  "dig-ember-2": ["..RRRR..", ".RRRRRR.", "RRRRRRRR", "..OOOO..", ".ORRROO.", "..ORRO..", "..OO.OO.", "..OO..OO", ".OO...OO", "OO....OO"],
-  "dig-ember-3": ["..RRRR..", ".RRRRRR.", "RRRRRRRR", "..OOOO..", ".ORRROO.", ".ORRROO.", "..OO.OO.", "..OO..OO", ".OO...OO", "OO....OO"],
-  "dig-ember-4": [".RRRRRR.", "RRRRRRRR", "RRRRRRRR", "..OOOO..", ".ORRROO.", ".ORRROO.", "..OO.OO.", "..OO..OO", ".OO...OO", "OO....OO"],
-  "dig-tide-0": ["...BB...", "..BBBB..", ".BBBBBB.", ".BBBBBB.", "..BBBB..", "...BB...", "........", "........", "........", "........"],
-  "dig-tide-1": ["...BB...", "..BBBB..", ".BBBBBB.", "..OOOO..", ".OBBBOO.", "..OBBO..", "..OO.OO.", "...OO...", "..OO.OO.", ".OO...OO"],
-  "dig-tide-2": ["..BBBB..", ".BBBBBB.", "BBBBBBBB", "..OOOO..", ".OBBBOO.", "..OBBO..", "..OO.OO.", "..OO..OO", ".OO...OO", "OO....OO"],
-  "dig-tide-3": ["..BBBB..", ".BBBBBB.", "BBBBBBBB", "..OOOO..", ".OBBBOO.", ".OBBBOO.", "..OO.OO.", "..OO..OO", ".OO...OO", "OO....OO"],
-  "dig-tide-4": [".BBBBBB.", "BBBBBBBB", "BBBBBBBB", "..OOOO..", ".OBBBOO.", ".OBBBOO.", "..OO.OO.", "..OO..OO", ".OO...OO", "OO....OO"],
-  "dig-leaf-0": ["...GG...", "..GGGG..", ".GGGGGG.", ".GGGGGG.", "..GGGG..", "...GG...", "........", "........", "........", "........"],
-  "dig-leaf-1": ["...GG...", "..GGGG..", ".GGGGGG.", "..OOOO..", ".OGGGOO.", "..OGGO..", "..OO.OO.", "...OO...", "..OO.OO.", ".OO...OO"],
-  "dig-leaf-2": ["..GGGG..", ".GGGGGG.", "GGGGGGGG", "..OOOO..", ".OGGGOO.", "..OGGO..", "..OO.OO.", "..OO..OO", ".OO...OO", "OO....OO"],
-  "dig-leaf-3": ["..GGGG..", ".GGGGGG.", "GGGGGGGG", "..OOOO..", ".OGGGOO.", ".OGGGOO.", "..OO.OO.", "..OO..OO", ".OO...OO", "OO....OO"],
-  "dig-leaf-4": [".GGGGGG.", "GGGGGGGG", "GGGGGGGG", "..OOOO..", ".OGGGOO.", ".OGGGOO.", "..OO.OO.", "..OO..OO", ".OO...OO", "OO....OO"],
-  "mob-slime": ["........", "..CC....", ".CCCC...", ".CCCC...", "..CC....", "........", "........", "........", "........", "........"],
-  "mob-bug": ["........", "...KK...", "..KGGK..", ".KGGGGK.", "..KGGK..", "...KK...", "........", "........", "........", "........"],
-  "mob-bunny": ["........", "..OOOO..", ".OWWWWO.", ".OWWWWO.", "..O..O..", "...OO...", "........", "........", "........", "........"],
-  "mob-ghost": ["........", "..WWWW..", ".WWWWWW.", ".WW.WW.", ".WWWWWW.", "..W..W..", "........", "........", "........", "........"],
-  "mob-demon": ["...RR...", "..RRRR..", ".RRRRRR.", ".RRRRRR.", "..R..R..", "..RRRR..", "........", "........", "........", "........"],
-  "mob-beast": ["........", "..HHHH..", ".HHHHHH.", ".HHOOHH.", ".HHHHHH.", "..H..H..", "........", "........", "........", "........"],
-  "mob-dragon": ["...RR...", "..RRRR..", ".RRYYRR.", ".RRRRRR.", "..R..R..", "..RRRR..", "........", "........", "........", "........"],
+const DIGITAL_BASE: Record<string, string[]> = {
+  "dig-ember-0": ["....RRRR....", "...RRRRRR...", "..RRRRRRRR..", "..RRRRRRRR..", "...RRRRRR...", "....RRRR....", "............", "............", "............", "............"],
+  "dig-ember-1": ["....RRRR....", "...RRRRRR...", "..RRRRRRRR..", "..OO..OO....", ".ORRRRRROO...", "..ORRRR.....", "..OO..OO....", "...OOOO.....", "..OO..OO....", ".OO....OO..."],
+  "dig-ember-2": ["...RRRRRR...", "..RRRRRRRR..", ".RRRRRRRRRR.", "..OO..OO....", ".ORRRRRROO...", "..ORRRR.....", "..OO..OO....", "..OO....OO..", ".OO.....OO..", "OO......OO.."],
+  "dig-ember-3": ["...RRRRRR...", "..RRRRRRRR..", ".RRRRRRRRRR.", "..OO..OO....", ".ORRRRRROO...", ".ORRRRRROO..", "..OO..OO....", "..OO....OO..", ".OO.....OO..", "OO......OO.."],
+  "dig-ember-4": ["..RRRRRRRR..", ".RRRRRRRRRR.", "RRRRRRRRRRRR", "..OO..OO....", ".ORRRRRROO...", ".ORRRRRROO..", "..OO..OO....", "..OO....OO..", ".OO.....OO..", "OO......OO.."],
+  "dig-tide-0": ["....BBBB....", "...BBBBBB...", "..BBBBBBBB..", "..BBBBBBBB..", "...BBBBBB...", "....BBBB....", "............", "............", "............", "............"],
+  "dig-tide-1": ["....BBBB....", "...BBBBBB...", "..BBBBBBBB..", "..OO..OO....", ".OBBBBBBOO...", "..OBBBB.....", "..OO..OO....", "...OOOO.....", "..OO..OO....", ".OO....OO..."],
+  "dig-tide-2": ["...BBBBBB...", "..BBBBBBBB..", ".BBBBBBBBBB.", "..OO..OO....", ".OBBBBBBOO...", "..OBBBB.....", "..OO..OO....", "..OO....OO..", ".OO.....OO..", "OO......OO.."],
+  "dig-tide-3": ["...BBBBBB...", "..BBBBBBBB..", ".BBBBBBBBBB.", "..OO..OO....", ".OBBBBBBOO...", ".OBBBBBBOO..", "..OO..OO....", "..OO....OO..", ".OO.....OO..", "OO......OO.."],
+  "dig-tide-4": ["..BBBBBBBB..", ".BBBBBBBBBB.", "BBBBBBBBBBBB", "..OO..OO....", ".OBBBBBBOO...", ".OBBBBBBOO..", "..OO..OO....", "..OO....OO..", ".OO.....OO..", "OO......OO.."],
+  "dig-leaf-0": ["....GGGG....", "...GGGGGG...", "..GGGGGGGG..", "..GGGGGGGG..", "...GGGGGG...", "....GGGG....", "............", "............", "............", "............"],
+  "dig-leaf-1": ["....GGGG....", "...GGGGGG...", "..GGGGGGGG..", "..OO..OO....", ".OGGGGGGOO...", "..OGGGG.....", "..OO..OO....", "...OOOO.....", "..OO..OO....", ".OO....OO..."],
+  "dig-leaf-2": ["...GGGGGG...", "..GGGGGGGG..", ".GGGGGGGGGG.", "..OO..OO....", ".OGGGGGGOO...", "..OGGGG.....", "..OO..OO....", "..OO....OO..", ".OO.....OO..", "OO......OO.."],
+  "dig-leaf-3": ["...GGGGGG...", "..GGGGGGGG..", ".GGGGGGGGGG.", "..OO..OO....", ".OGGGGGGOO...", ".OGGGGGGOO..", "..OO..OO....", "..OO....OO..", ".OO.....OO..", "OO......OO.."],
+  "dig-leaf-4": ["..GGGGGGGG..", ".GGGGGGGGGG.", "GGGGGGGGGGGG", "..OO..OO....", ".OGGGGGGOO...", ".OGGGGGGOO..", "..OO..OO....", "..OO....OO..", ".OO.....OO..", "OO......OO.."],
+  "mob-bug": ["............", "...KK.......", "..KGGGK.....", ".KGGGGGK....", "..KGGGK.....", "...KK.......", "............", "............", "............", "............"],
+  "mob-bunny": ["............", "..OOOO......", ".OWWWWWO....", ".OWWWWWO....", "..OO..OO....", "...OOO......", "............", "............", "............", "............"],
+  "mob-ghost": ["............", "..WWWW......", ".WWWWWW.....", ".WWWWWW.....", ".WW..WW.....", "..WW..WW....", "............", "............", "............", "............"],
+  "mob-demon": ["...RRRR.....", "..RRRRRR....", ".RRRRRRRR...", ".RRRRRRRR...", "..RR..RR....", "..RRRRRR....", "............", "............", "............", "............"],
+  "mob-beast": ["............", "..HHHH......", ".HHHHHH.....", ".HHOOHH.....", ".HHHHHH.....", "..HH..HH....", "............", "............", "............", "............"],
+  "mob-dragon": ["...RRRR.....", "..RRYYRR....", ".RRRRRRRR...", ".RRRRRRRR...", "..RR..RR....", "..RRRRRR....", "............", "............", "............", "............"],
 };
+
+function rowWidth(grid: string[]): number {
+  return Math.max(...grid.map((r) => r.length), 8);
+}
 
 function shiftGrid(grid: string[], dy: number): string[] {
-  if (dy === 0) return grid;
-  const blank = "........";
-  if (dy > 0) return [...grid.slice(dy), ...Array(dy).fill(blank)];
-  return [...Array(-dy).fill(blank), ...grid.slice(0, grid.length + dy)];
+  if (dy === 0) return grid.map((r) => r.slice());
+  const w = rowWidth(grid);
+  const blank = ".".repeat(w);
+  if (dy > 0) return [...grid.slice(dy).map((r) => r.padEnd(w, ".")), ...Array(dy).fill(blank)];
+  const n = -dy;
+  return [...Array(n).fill(blank), ...grid.slice(0, grid.length - n).map((r) => r.padEnd(w, "."))];
 }
 
 function tintGrid(grid: string[], map: Record<string, string>): string[] {
@@ -70,25 +53,30 @@ function tintGrid(grid: string[], map: Record<string, string>): string[] {
 }
 
 function buildDerived(): Record<string, string[]> {
-  const out: Record<string, string[]> = { ...BASE };
+  const out: Record<string, string[]> = { ...RO_ADVENTURER_SPRITES, ...DIGITAL_BASE };
 
-  for (const key of Object.keys(BASE)) {
-    out[`${key}-w2`] = shiftGrid(BASE[key], 1);
-    out[`${key}-atk`] = shiftGrid(BASE[key], -1);
+  for (const key of Object.keys(RO_ADVENTURER_SPRITES)) {
+    if (key.endsWith("-atk")) continue;
+    out[`${key}-w2`] = shiftGrid(RO_ADVENTURER_SPRITES[key], 1);
   }
 
-  out["dig-ember-3a"] = tintGrid(BASE["dig-ember-3"], { R: "R" });
-  out["dig-ember-3b"] = tintGrid(BASE["dig-ember-3"], { R: "Y", O: "R" });
-  out["dig-ember-4a"] = tintGrid(BASE["dig-ember-4"], { R: "R" });
-  out["dig-ember-4b"] = tintGrid(BASE["dig-ember-4"], { R: "Y", O: "R" });
-  out["dig-tide-3a"] = tintGrid(BASE["dig-tide-3"], { B: "B" });
-  out["dig-tide-3b"] = tintGrid(BASE["dig-tide-3"], { B: "M", O: "B" });
-  out["dig-tide-4a"] = tintGrid(BASE["dig-tide-4"], { B: "B" });
-  out["dig-tide-4b"] = tintGrid(BASE["dig-tide-4"], { B: "M", O: "B" });
-  out["dig-leaf-3a"] = tintGrid(BASE["dig-leaf-3"], { G: "G" });
-  out["dig-leaf-3b"] = tintGrid(BASE["dig-leaf-3"], { G: "C", O: "G" });
-  out["dig-leaf-4a"] = tintGrid(BASE["dig-leaf-4"], { G: "G" });
-  out["dig-leaf-4b"] = tintGrid(BASE["dig-leaf-4"], { G: "C", O: "G" });
+  for (const key of Object.keys(DIGITAL_BASE)) {
+    out[`${key}-w2`] = shiftGrid(DIGITAL_BASE[key], 1);
+    out[`${key}-atk`] = shiftGrid(DIGITAL_BASE[key], -1);
+  }
+
+  out["dig-ember-3a"] = tintGrid(DIGITAL_BASE["dig-ember-3"], { R: "R" });
+  out["dig-ember-3b"] = tintGrid(DIGITAL_BASE["dig-ember-3"], { R: "Y", O: "R" });
+  out["dig-ember-4a"] = tintGrid(DIGITAL_BASE["dig-ember-4"], { R: "R" });
+  out["dig-ember-4b"] = tintGrid(DIGITAL_BASE["dig-ember-4"], { R: "Y", O: "R" });
+  out["dig-tide-3a"] = tintGrid(DIGITAL_BASE["dig-tide-3"], { B: "B" });
+  out["dig-tide-3b"] = tintGrid(DIGITAL_BASE["dig-tide-3"], { B: "M", O: "B" });
+  out["dig-tide-4a"] = tintGrid(DIGITAL_BASE["dig-tide-4"], { B: "B" });
+  out["dig-tide-4b"] = tintGrid(DIGITAL_BASE["dig-tide-4"], { B: "M", O: "B" });
+  out["dig-leaf-3a"] = tintGrid(DIGITAL_BASE["dig-leaf-3"], { G: "G" });
+  out["dig-leaf-3b"] = tintGrid(DIGITAL_BASE["dig-leaf-3"], { G: "g", O: "G" });
+  out["dig-leaf-4a"] = tintGrid(DIGITAL_BASE["dig-leaf-4"], { G: "G" });
+  out["dig-leaf-4b"] = tintGrid(DIGITAL_BASE["dig-leaf-4"], { G: "g", O: "G" });
 
   return out;
 }
@@ -100,8 +88,14 @@ export type SpritePose = "idle" | "walk" | "attack";
 export function resolveSpriteKey(c: CompanionState, pose: SpritePose = "idle", walkFrame = 0): string {
   let key = baseSpriteKey(c);
   if (key === "none") return key;
-  if (pose === "walk" && walkFrame % 2 === 1) key += "-w2";
-  if (pose === "attack") key += "-atk";
+  if (pose === "walk" && walkFrame % 2 === 1) {
+    const w2 = `${key}-w2`;
+    if (SPRITE_GRIDS[w2]) key = w2;
+  }
+  if (pose === "attack") {
+    const atk = `${key}-atk`;
+    if (SPRITE_GRIDS[atk]) key = atk;
+  }
   return SPRITE_GRIDS[key] ? key : baseSpriteKey(c);
 }
 
@@ -124,8 +118,14 @@ export function baseSpriteKey(c: CompanionState): string {
   return "none";
 }
 
+export function spriteGridSize(key: string): { cols: number; rows: number } {
+  const grid = SPRITE_GRIDS[key] ?? SPRITE_GRIDS["adv-knight-1"];
+  return { cols: rowWidth(grid), rows: grid.length };
+}
+
 export function renderPixelSprite(key: string, extraClass = ""): string {
-  const grid = SPRITE_GRIDS[key] ?? SPRITE_GRIDS["dig-ember-0"];
+  const grid = SPRITE_GRIDS[key] ?? SPRITE_GRIDS["adv-knight-1"];
+  const cols = rowWidth(grid);
   const cells = grid
     .join("")
     .split("")
@@ -135,9 +135,14 @@ export function renderPixelSprite(key: string, extraClass = ""): string {
       return `<i class="px-cell" style="${style}"></i>`;
     })
     .join("");
-  return `<div class="pixel-sprite ${extraClass}" data-sprite="${key}" aria-hidden="true">${cells}</div>`;
+  return `<div class="pixel-sprite ${extraClass}" data-sprite="${key}" style="--px-cols:${cols}" aria-hidden="true">${cells}</div>`;
 }
 
-export function renderCompanionSprite(c: CompanionState, extraClass = "", pose: SpritePose = "idle", walkFrame = 0): string {
+export function renderCompanionSprite(
+  c: CompanionState,
+  extraClass = "",
+  pose: SpritePose = "idle",
+  walkFrame = 0
+): string {
   return renderPixelSprite(resolveSpriteKey(c, pose, walkFrame), extraClass);
 }
