@@ -76,9 +76,11 @@ npx wrangler kv namespace create VAULT
 npm run deploy
 ```
 
-部署完成後會得到網址，例如：
+部署完成後，Worker 網址格式為：
 
-`https://life-journal-sync.你的帳號.workers.dev`
+`https://life-journal-sync.<你的子網域>.workers.dev`
+
+目前部署範例：`https://life-journal-sync.show0621.workers.dev`
 
 ### 在 App 中設定
 
