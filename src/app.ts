@@ -294,7 +294,7 @@ async function runCloudSync(manual: boolean): Promise<void> {
 function renderAuth(): void {
   root.innerHTML = `
     <div class="auth-screen">
-      <div class="auth-card" id="auth-card"></div>
+      <div class="auth-card glass-panel" id="auth-card"></div>
     </div>
   `;
   void setupAuth();
@@ -459,7 +459,7 @@ function renderList(): string {
 function renderEntryUnlock(_entry: Entry): string {
   return `
     <div class="auth-screen">
-      <div class="panel">
+      <div class="panel glass-panel">
         <h2>🔒 此記錄已上鎖</h2>
         <p>輸入這篇記錄的 PIN 碼以查看內容。</p>
         <form id="entry-unlock-form">
