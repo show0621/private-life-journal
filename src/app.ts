@@ -282,7 +282,7 @@ function renderBrand(compact = false): string {
   return `
     <div class="brand">
       <p class="brand-mark">The Hideaway</p>
-      <p class="brand-tagline">${compact ? "日記" : "光と風に、言葉を残す"}</p>
+      <p class="brand-tagline">${compact ? "日記" : "青空の下、ことばを留めて"}</p>
     </div>
   `;
 }
