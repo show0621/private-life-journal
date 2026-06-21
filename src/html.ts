@@ -1,3 +1,20 @@
+export function sanitizeRichHtml(html: string): string {
+  if (!html) return html;
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  doc.body.querySelectorAll("*").forEach((el) => {
+    if (el instanceof HTMLElement) {
+      el.style.removeProperty("color");
+      el.style.removeProperty("background-color");
+      el.style.removeProperty("background");
+      if (el.getAttribute("style") === "") el.removeAttribute("style");
+    }
+    if (el.tagName === "FONT") {
+      el.removeAttribute("color");
+    }
+  });
+  return doc.body.innerHTML;
+}
+
 export function stripHtml(html: string): string {
   const doc = new DOMParser().parseFromString(html, "text/html");
   return (doc.body.textContent ?? "").replace(/\s+/g, " ").trim();

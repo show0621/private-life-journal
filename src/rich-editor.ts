@@ -1,4 +1,4 @@
-import { plainToHtml } from "./html";
+import { plainToHtml, sanitizeRichHtml } from "./html";
 
 const COMMANDS: Array<{ cmd: string; label: string; title: string; value?: string }> = [
   { cmd: "bold", label: "B", title: "粗體" },
@@ -29,9 +29,11 @@ export function bindRichEditor(
   format: string | undefined,
   onChange: () => void
 ): void {
-  editor.innerHTML = format === "html" || /<[^>]+>/.test(initialContent)
-    ? initialContent
-    : plainToHtml(initialContent);
+  editor.innerHTML = sanitizeRichHtml(
+    format === "html" || /<[^>]+>/.test(initialContent)
+      ? initialContent
+      : plainToHtml(initialContent)
+  );
   editor.dataset.placeholder = "寫下此刻的想法…";
 
   editor.addEventListener("input", onChange);
@@ -62,5 +64,5 @@ export function getRichContent(editor: HTMLElement): { content: string; format: 
     .replace(/^<br>$/i, "")
     .trim();
   if (!html || html === "<br>") return { content: "", format: "html" };
-  return { content: html, format: "html" };
+  return { content: sanitizeRichHtml(html), format: "html" };
 }

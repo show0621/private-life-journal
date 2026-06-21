@@ -486,6 +486,17 @@ button {
   line-height: 1.7;
   outline: none;
   overflow-y: auto;
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--text);
+}
+
+.rich-editor :is(p, div, span, h2, h3, li, font) {
+  color: var(--text) !important;
+  background: transparent !important;
+}
+
+.rich-editor a {
+  color: var(--accent-strong) !important;
 }
 
 .rich-editor:empty::before {
@@ -503,7 +514,7 @@ button {
   margin: 0.8em 0;
   padding-left: 12px;
   border-left: 3px solid var(--accent);
-  color: var(--text-muted);
+  color: var(--text-muted) !important;
 }
 
 .rich-editor ul {
