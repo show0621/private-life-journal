@@ -49,8 +49,36 @@ import {
   WEEKDAY_LABELS,
 } from "./planner";
 import { pullFromCloud, pushToCloud, testCloudConnection } from "./sync";
+import {
+  defaultCompanion,
+  equipWeapon,
+  grantJournalXp,
+  hatchDigitalEgg,
+  JOURNAL_XP,
+  runBattle,
+  startAdventurer,
+  startDigital,
+} from "./companion/game";
+import {
+  destroyCompanionWalker,
+  injectCompanionChrome,
+  mountCompanionWalker,
+  renderCompanionScreen,
+} from "./companion/ui";
 import { getResolvedTheme, getStoredTheme, setStoredTheme } from "./theme";
-import type { BackupFile, CalendarEvent, Entry, EntryType, SyncSettings, ThemeMode, TodoItem, VaultData } from "./types";
+import type {
+  AdventurerClass,
+  BackupFile,
+  CalendarEvent,
+  CompanionState,
+  DigitalSpecies,
+  Entry,
+  EntryType,
+  SyncSettings,
+  ThemeMode,
+  TodoItem,
+  VaultData,
+} from "./types";
 import { DEFAULT_SYNC_API_URL, ENTRY_TYPE_LABELS, MOOD_OPTIONS } from "./types";
 import {
   debounce,
@@ -69,7 +97,7 @@ const IOS_PASSWORD_INPUT =
 const IOS_MASKED_INPUT =
   'type="text" class="masked-input" inputmode="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"';
 
-type MainView = "journal" | "calendar" | "todos";
+type MainView = "journal" | "calendar" | "todos" | "companion";
 type View = MainView | "entry-view" | "editor" | "settings" | "entry-unlock";
 
 interface AppState {
@@ -95,6 +123,7 @@ interface AppState {
   calendarMonth: number;
   selectedDate: string;
   todoFilter: "all" | "active" | "done";
+  companion: CompanionState;
 }
 
 const now = new Date();
@@ -120,6 +149,7 @@ const state: AppState = {
   calendarMonth: now.getMonth(),
   selectedDate: todayKey(),
   todoFilter: "active",
+  companion: defaultCompanion(),
 };
 
 const root = document.getElementById("app")!;
@@ -140,12 +170,14 @@ function resetLockTimer(): void {
 function lock(): void {
   stopReminderLoop();
   hidePrivacyShield();
+  destroyCompanionWalker();
   state.unlocked = false;
   state.password = "";
   state.salt = undefined;
   state.entries = [];
   state.todos = [];
   state.events = [];
+  state.companion = defaultCompanion();
   state.view = "journal";
   state.editingId = null;
   state.unlockedEntryIds.clear();
@@ -153,15 +185,33 @@ function lock(): void {
 }
 
 function vaultData(): VaultData {
-  return { entries: state.entries, todos: state.todos, events: state.events };
+  return {
+    entries: state.entries,
+    todos: state.todos,
+    events: state.events,
+    companion: state.companion,
+  };
 }
 
 function loadVaultIntoState(data: VaultData & { salt: ArrayBuffer; updatedAt: number }): void {
   state.entries = data.entries;
   state.todos = data.todos;
   state.events = data.events;
+  state.companion = data.companion ?? defaultCompanion();
   state.salt = data.salt;
   state.vaultUpdatedAt = data.updatedAt;
+}
+
+function mountCompanionIfNeeded(): void {
+  if (state.companion.mode === "none") {
+    destroyCompanionWalker();
+    return;
+  }
+  mountCompanionWalker(state.companion, () => {
+    touchActivity();
+    state.view = "companion";
+    render();
+  });
 }
 
 function isLocalVaultEmpty(): boolean {
@@ -176,8 +226,8 @@ function markSyncOk(settings: SyncSettings): void {
 }
 
 async function applyRemoteVault(remote: { buffer: ArrayBuffer; updatedAt: number }): Promise<void> {
-  const { entries, todos, events, salt, updatedAt } = await decryptVault(state.password, remote.buffer);
-  loadVaultIntoState({ entries, todos, events, salt, updatedAt });
+  const { entries, todos, events, companion, salt, updatedAt } = await decryptVault(state.password, remote.buffer);
+  loadVaultIntoState({ entries, todos, events, companion, salt, updatedAt });
   await saveVault(remote.buffer);
 }
 
@@ -358,7 +408,7 @@ function openEntryView(id: string): void {
   touchActivity();
   const entry = getEntry(id);
   if (!entry) return;
-  if (state.view === "journal" || state.view === "calendar" || state.view === "todos") {
+  if (state.view === "journal" || state.view === "calendar" || state.view === "todos" || state.view === "companion") {
     state.returnView = state.view;
   }
   state.editingId = id;
@@ -456,7 +506,7 @@ async function runCloudSync(manual: boolean): Promise<"pulled" | "pushed" | "noo
           await applyRemoteVault(remote);
           markSyncOk(settings);
           if (manual) showToast("已從雲端同步");
-          if (state.view === "journal" || state.view === "calendar" || state.view === "todos") render();
+          if (state.view === "journal" || state.view === "calendar" || state.view === "todos" || state.view === "companion") render();
           return "pulled";
         }
       }
@@ -658,10 +708,10 @@ function bindAuthEvents(hasLocalVault: boolean): void {
       return;
     }
     try {
-      const { entries, todos, events, salt, updatedAt } = await decryptVault(password, buffer);
-      state.unlocked = true;
-      state.password = password;
-      loadVaultIntoState({ entries, todos, events, salt, updatedAt });
+        const { entries, todos, events, companion, salt, updatedAt } = await decryptVault(password, buffer);
+        state.unlocked = true;
+        state.password = password;
+        loadVaultIntoState({ entries, todos, events, companion, salt, updatedAt });
       touchActivity();
       beginReminderLoop();
       render();
@@ -711,6 +761,7 @@ function bindAuthEvents(hasLocalVault: boolean): void {
     state.entries = [];
     state.todos = [];
     state.events = [];
+    state.companion = defaultCompanion();
     state.vaultUpdatedAt = Date.now();
     const buffer = await encryptVault(password, vaultData(), undefined, state.vaultUpdatedAt);
     await saveVault(buffer);
@@ -745,7 +796,7 @@ function runAutoCloudSync(reason: "unlock" | "foreground" | "save"): void {
   void runCloudSync(false).then((result) => {
     if (result === "pulled") {
       showToast(reason === "foreground" ? "已同步雲端最新內容" : "已從雲端同步最新內容");
-      if (state.view === "journal" || state.view === "calendar" || state.view === "todos") render();
+      if (state.view === "journal" || state.view === "calendar" || state.view === "todos" || state.view === "companion") render();
     }
   });
 }
@@ -766,11 +817,12 @@ function renderAppHeader(options?: { showHiddenToggle?: boolean }): string {
   `;
 }
 
-function renderBottomNav(active: "journal" | "calendar" | "todos"): string {
+function renderBottomNav(active: MainView): string {
   const items = [
     { id: "journal", label: "日記" },
     { id: "calendar", label: "行事曆" },
     { id: "todos", label: "待辦" },
+    { id: "companion", label: "夥伴" },
   ] as const;
   return `
     <nav class="bottom-nav">
@@ -1308,6 +1360,8 @@ function renderSettings(): string {
 }
 
 function render(): void {
+  destroyCompanionWalker();
+
   if (!state.unlocked) {
     renderAuth();
     return;
@@ -1318,6 +1372,7 @@ function render(): void {
     if (entry) {
       root.innerHTML = renderEntryUnlock(entry);
       bindEntryUnlockEvents(entry);
+      mountCompanionIfNeeded();
       return;
     }
     state.view = "journal";
@@ -1329,6 +1384,7 @@ function render(): void {
     if (entry) {
       root.innerHTML = renderEntryView(entry);
       bindEntryViewEvents(entry);
+      mountCompanionIfNeeded();
       return;
     }
     state.view = state.returnView;
@@ -1338,6 +1394,7 @@ function render(): void {
   if (state.view === "settings") {
     root.innerHTML = renderSettings();
     bindSettingsEvents();
+    mountCompanionIfNeeded();
     return;
   }
 
@@ -1346,26 +1403,41 @@ function render(): void {
     if (entry) {
       root.innerHTML = renderEditor(entry);
       bindEditorEvents(entry);
+      mountCompanionIfNeeded();
       return;
     }
     state.view = "journal";
     state.editingId = null;
   }
 
+  if (state.view === "companion") {
+    root.innerHTML = injectCompanionChrome(
+      renderCompanionScreen(state.companion),
+      renderAppHeader({ showHiddenToggle: false }),
+      renderBottomNav("companion")
+    );
+    bindCompanionEvents();
+    mountCompanionIfNeeded();
+    return;
+  }
+
   if (state.view === "calendar") {
     root.innerHTML = renderCalendar();
     bindCalendarEvents();
+    mountCompanionIfNeeded();
     return;
   }
 
   if (state.view === "todos") {
     root.innerHTML = renderTodos();
     bindTodoEvents();
+    mountCompanionIfNeeded();
     return;
   }
 
   root.innerHTML = renderJournal();
   bindJournalEvents();
+  mountCompanionIfNeeded();
 }
 
 function openNew(type: EntryType = "diary"): void {
@@ -1382,7 +1454,10 @@ function openNew(type: EntryType = "diary"): void {
   upsertEntry(entry);
   state.editingId = entry.id;
   state.editorIsNew = true;
-  state.returnView = state.view === "journal" || state.view === "calendar" || state.view === "todos" ? state.view : "journal";
+  state.returnView =
+    state.view === "journal" || state.view === "calendar" || state.view === "todos" || state.view === "companion"
+      ? state.view
+      : "journal";
   state.view = "editor";
   render();
 }
@@ -1515,6 +1590,68 @@ function bindSharedChrome(): void {
       state.view = (btn as HTMLElement).dataset.nav as View;
       render();
     });
+  });
+}
+
+function bindCompanionEvents(): void {
+  bindSharedChrome();
+
+  document.querySelectorAll("[data-start-adv]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      touchActivity();
+      const cls = (btn as HTMLElement).dataset.startAdv as AdventurerClass;
+      state.companion = startAdventurer(state.companion, cls);
+      schedulePersist();
+      showToast(`${cls === "knight" ? "騎士" : cls === "mage" ? "法師" : "獵人"} 出發！`);
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-start-dig]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      touchActivity();
+      const species = (btn as HTMLElement).dataset.startDig as DigitalSpecies;
+      state.companion = startDigital(state.companion, species);
+      schedulePersist();
+      showToast("數碼蛋已開始孵化，寫日記可加速成長");
+      render();
+    });
+  });
+
+  document.getElementById("btn-hatch")?.addEventListener("click", () => {
+    touchActivity();
+    const notes = hatchDigitalEgg(state.companion);
+    schedulePersist();
+    showToast(notes.length ? notes.join(" · ") : "還需要多寫一些日記");
+    render();
+  });
+
+  document.getElementById("btn-battle")?.addEventListener("click", () => {
+    touchActivity();
+    const result = runBattle(state.companion);
+    schedulePersist();
+    showToast(result.notes.join(" · "));
+    render();
+  });
+
+  document.querySelectorAll("[data-equip]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      touchActivity();
+      const id = (btn as HTMLElement).dataset.equip!;
+      if (equipWeapon(state.companion, id)) {
+        schedulePersist();
+        showToast("已裝備武器");
+        render();
+      }
+    });
+  });
+
+  document.getElementById("btn-companion-reset")?.addEventListener("click", () => {
+    if (!confirm("確定要重新選擇夥伴？等級與武器會重置。")) return;
+    touchActivity();
+    state.companion = defaultCompanion();
+    schedulePersist();
+    render();
   });
 }
 
@@ -1757,11 +1894,18 @@ function bindEditorEvents(entry: Entry): void {
       state.unlockedEntryIds.delete(entry.id);
     }
 
+    const xpNotes = grantJournalXp(
+      state.companion,
+      JOURNAL_XP[entry.type],
+      `寫下${ENTRY_TYPE_LABELS[entry.type]}`
+    );
+
     upsertEntry(entry);
     state.editorIsNew = false;
     state.view = "entry-view";
     render();
-    showToast("已儲存");
+    if (xpNotes.length) showToast(`${xpNotes.join(" · ")} · 已儲存`);
+    else showToast("已儲存");
   });
 
   document.getElementById("entry-title")?.addEventListener("focus", (e) => {
@@ -1916,9 +2060,9 @@ function bindSettingsEvents(): void {
       if (backup.version !== 1 || !backup.data) throw new Error("invalid");
       const password = prompt("請輸入備份檔的密碼（通常與目前密碼相同）：");
       if (!password) return;
-      const { entries, todos, events, salt, updatedAt } = await restoreBackup(password, backup);
+      const { entries, todos, events, companion, salt, updatedAt } = await restoreBackup(password, backup);
       if (!confirm("匯入會覆蓋目前裝置上的所有記錄，確定繼續？")) return;
-      loadVaultIntoState({ entries, todos, events, salt, updatedAt });
+      loadVaultIntoState({ entries, todos, events, companion, salt, updatedAt });
       await persist();
       showToast("備份已還原");
       state.view = "journal";

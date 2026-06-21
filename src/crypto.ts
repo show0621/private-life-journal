@@ -7,7 +7,9 @@ import type {
   VaultData,
   VaultPayload,
   VaultPayloadV2,
+  VaultPayloadV3,
 } from "./types";
+import { defaultCompanion, normalizeCompanion } from "./companion/game";
 
 const PBKDF2_ITERATIONS = 250_000;
 const SALT_BYTES = 16;
@@ -115,21 +117,36 @@ function normalizeEvent(event: CalendarEvent): CalendarEvent {
   };
 }
 
-function normalizePayload(raw: Entry[] | VaultPayloadV2 | VaultPayload): VaultPayload {
+function normalizePayload(raw: Entry[] | VaultPayloadV2 | VaultPayloadV3 | VaultPayload): VaultPayload {
   if (Array.isArray(raw)) {
     const entries = raw.map(normalizeEntry);
     const updatedAt = entries.reduce((max, e) => Math.max(max, e.updatedAt), Date.now());
-    return { version: 3, entries, todos: [], events: [], updatedAt };
+    return { version: 4, entries, todos: [], events: [], companion: defaultCompanion(), updatedAt };
   }
 
   if (raw.version === 2) {
     const entries = raw.entries.map(normalizeEntry);
     return {
-      version: 3,
+      version: 4,
       entries,
       todos: [],
       events: [],
+      companion: defaultCompanion(),
       updatedAt: raw.updatedAt ?? entries.reduce((max, e) => Math.max(max, e.updatedAt), Date.now()),
+    };
+  }
+
+  if (raw.version === 3) {
+    const entries = raw.entries.map(normalizeEntry);
+    const todos = (raw.todos ?? []).map(normalizeTodo);
+    const events = (raw.events ?? []).map(normalizeEvent);
+    return {
+      version: 4,
+      entries,
+      todos,
+      events,
+      companion: defaultCompanion(),
+      updatedAt: raw.updatedAt ?? Math.max(Date.now(), ...entries.map((e) => e.updatedAt), 0),
     };
   }
 
@@ -137,10 +154,11 @@ function normalizePayload(raw: Entry[] | VaultPayloadV2 | VaultPayload): VaultPa
   const todos = (raw.todos ?? []).map(normalizeTodo);
   const events = (raw.events ?? []).map(normalizeEvent);
   return {
-    version: 3,
+    version: 4,
     entries,
     todos,
     events,
+    companion: normalizeCompanion(raw.companion),
     updatedAt: raw.updatedAt ?? Math.max(Date.now(), ...entries.map((e) => e.updatedAt), 0),
   };
 }
@@ -156,10 +174,11 @@ export function buildVaultPayload(data: VaultData, updatedAt?: number): VaultPay
     ...events.map((e) => e.updatedAt),
   ];
   return {
-    version: 3,
+    version: 4,
     entries,
     todos,
     events,
+    companion: normalizeCompanion(data.companion),
     updatedAt: Math.max(Date.now(), ...stamps),
   };
 }
@@ -180,12 +199,13 @@ export async function decryptVault(
   buffer: ArrayBuffer
 ): Promise<VaultData & { salt: ArrayBuffer; updatedAt: number }> {
   const payload = JSON.parse(new TextDecoder().decode(buffer)) as EncryptedPayload;
-  const raw = await decryptJson<Entry[] | VaultPayloadV2 | VaultPayload>(password, payload);
+  const raw = await decryptJson<Entry[] | VaultPayloadV2 | VaultPayloadV3 | VaultPayload>(password, payload);
   const vault = normalizePayload(raw);
   return {
     entries: vault.entries,
     todos: vault.todos,
     events: vault.events,
+    companion: vault.companion,
     salt: base64ToBuffer(payload.salt),
     updatedAt: vault.updatedAt,
   };
@@ -197,7 +217,7 @@ export async function encryptEntries(
   entries: Entry[],
   existingSalt?: ArrayBuffer
 ): Promise<ArrayBuffer> {
-  return encryptVault(password, { entries, todos: [], events: [] }, existingSalt);
+  return encryptVault(password, { entries, todos: [], events: [], companion: defaultCompanion() }, existingSalt);
 }
 
 /** @deprecated use decryptVault */
@@ -227,12 +247,13 @@ export async function restoreBackup(
   password: string,
   backup: BackupFile
 ): Promise<VaultData & { salt: ArrayBuffer; updatedAt: number }> {
-  const raw = await decryptJson<Entry[] | VaultPayloadV2 | VaultPayload>(password, backup);
+  const raw = await decryptJson<Entry[] | VaultPayloadV2 | VaultPayloadV3 | VaultPayload>(password, backup);
   const vault = normalizePayload(raw);
   return {
     entries: vault.entries,
     todos: vault.todos,
     events: vault.events,
+    companion: vault.companion,
     salt: base64ToBuffer(backup.salt),
     updatedAt: vault.updatedAt,
   };
@@ -255,7 +276,12 @@ export async function changePassword(
   const data = await decryptVault(oldPassword, buffer);
   return encryptVault(
     newPassword,
-    { entries: data.entries, todos: data.todos, events: data.events },
+    {
+      entries: data.entries,
+      todos: data.todos,
+      events: data.events,
+      companion: data.companion,
+    },
     data.salt,
     data.updatedAt
   );

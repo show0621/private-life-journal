@@ -94,6 +94,70 @@ export interface CalendarEvent {
 
 
 
+export type CompanionMode = "none" | "adventurer" | "digital";
+
+export type AdventurerClass = "knight" | "mage" | "hunter";
+
+export type DigitalSpecies = "ember" | "tide" | "leaf";
+
+export type WeaponRarity = "common" | "rare" | "epic";
+
+
+
+export interface CompanionWeapon {
+
+  id: string;
+
+  name: string;
+
+  rarity: WeaponRarity;
+
+  atk: number;
+
+  classTag?: AdventurerClass | "any";
+
+}
+
+
+
+export interface CompanionState {
+
+  mode: CompanionMode;
+
+  adventurerClass?: AdventurerClass;
+
+  digitalSpecies?: DigitalSpecies;
+
+  level: number;
+
+  xp: number;
+
+  xpToNext: number;
+
+  stage: number;
+
+  hp: number;
+
+  maxHp: number;
+
+  weapons: CompanionWeapon[];
+
+  equippedWeaponId?: string;
+
+  hasWolf?: boolean;
+
+  battlesWon: number;
+
+  journalXpTotal: number;
+
+  lastBattleAt?: number;
+
+  battleLog?: string[];
+
+}
+
+
+
 export interface VaultData {
 
   entries: Entry[];
@@ -101,6 +165,8 @@ export interface VaultData {
   todos: TodoItem[];
 
   events: CalendarEvent[];
+
+  companion: CompanionState;
 
 }
 
@@ -119,6 +185,24 @@ export interface VaultPayloadV2 {
 
 
 export interface VaultPayload {
+
+  version: 4;
+
+  entries: Entry[];
+
+  todos: TodoItem[];
+
+  events: CalendarEvent[];
+
+  companion: CompanionState;
+
+  updatedAt: number;
+
+}
+
+
+
+export interface VaultPayloadV3 {
 
   version: 3;
 
