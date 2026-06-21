@@ -221,7 +221,7 @@ async function persist(): Promise<void> {
     state.vaultUpdatedAt
   );
   await saveVault(buffer);
-  if (state.syncSettings.enabled && state.syncSettings.autoSync) {
+  if (state.syncSettings.enabled && state.syncSettings.syncKey) {
     await runCloudSync(false);
   }
 }
@@ -490,27 +490,40 @@ function renderAuth(): void {
 async function setupAuth(): Promise<void> {
   const exists = await hasVault();
   const card = document.getElementById("auth-card")!;
-  if (exists) {
-    card.innerHTML = renderUnlockForm();
-    bindAuthEvents(true);
-    return;
-  }
-  card.innerHTML = renderSetupForm();
-  bindAuthEvents(false);
+  card.innerHTML = exists ? renderUnlockForm() : renderSetupForm();
+  bindAuthEvents(exists);
 }
 
-function renderAuthTabs(active: "setup" | "restore"): string {
+type AuthTabMode = "unlock" | "restore" | "setup";
+
+function renderAuthTabs(active: AuthTabMode, hasLocalVault: boolean): string {
+  if (hasLocalVault) {
+    return `
+    <div class="auth-tabs">
+      <button type="button" class="auth-tab ${active === "unlock" ? "active" : ""}" data-auth-mode="unlock">本機解鎖</button>
+      <button type="button" class="auth-tab ${active === "restore" ? "active" : ""}" data-auth-mode="restore">雲端還原</button>
+    </div>
+  `;
+  }
   return `
     <div class="auth-tabs">
       <button type="button" class="auth-tab ${active === "setup" ? "active" : ""}" data-auth-mode="setup">建立新保險庫</button>
-      <button type="button" class="auth-tab ${active === "restore" ? "active" : ""}" data-auth-mode="restore">從雲端還原</button>
+      <button type="button" class="auth-tab ${active === "restore" ? "active" : ""}" data-auth-mode="restore">雲端還原</button>
     </div>
   `;
 }
 
+function switchAuthView(mode: AuthTabMode, hasLocalVault: boolean): void {
+  const card = document.getElementById("auth-card")!;
+  if (mode === "restore") card.innerHTML = renderRestoreForm(hasLocalVault);
+  else if (mode === "unlock") card.innerHTML = renderUnlockForm();
+  else card.innerHTML = renderSetupForm();
+  bindAuthEvents(hasLocalVault);
+}
+
 function renderSetupForm(): string {
   return `
-    ${renderAuthTabs("setup")}
+    ${renderAuthTabs("setup", false)}
     <div class="auth-brand">${renderBrand().trim()}</div>
     <h1>Welcome in</h1>
     <p>設定你的密碼。文字只留在這裡，由你加密保管。</p>
@@ -521,25 +534,30 @@ function renderSetupForm(): string {
       </div>
       <div class="field">
         <label for="setup-confirm">確認密碼</label>
-        <input id="setup-confirm" ${IOS_PASSWORD_INPUT} autocomplete="new-password" minlength="6" required placeholder="再輸入一次" enterkeyhint="done" />
+        <input id="setup-confirm" ${IOS_PASSWORD_INPUT} autocomplete="new-password" minlength="6" required placeholder="再輸入一次" enterkeyhint="next" />
+      </div>
+      <div class="field">
+        <label for="setup-sync-key">同步金鑰（選填，建議填）</label>
+        <input id="setup-sync-key" ${IOS_MASKED_INPUT} placeholder="與其他裝置相同，即可自動備份" enterkeyhint="done" />
       </div>
       <p class="error-text" id="auth-error"></p>
       <button class="btn btn-primary btn-block" type="submit">開始使用</button>
     </form>
     <div class="security-note">
-      已在電腦寫過日記？請改按上方「從雲端還原」，不要建立新保險庫。
+      已在電腦寫過日記？請改按上方「雲端還原」，不要建立新保險庫。
     </div>
   `;
 }
 
-function renderRestoreForm(): string {
+function renderRestoreForm(hasLocalVault: boolean): string {
   const sync = loadSyncSettings();
   const apiUrl = sync.apiUrl || DEFAULT_SYNC_API_URL;
   return `
-    ${renderAuthTabs("restore")}
+    ${renderAuthTabs("restore", hasLocalVault)}
     <div class="auth-brand">${renderBrand().trim()}</div>
-    <h1>從雲端還原</h1>
+    <h1>雲端還原</h1>
     <p>輸入與電腦<strong>相同</strong>的解鎖密碼與同步金鑰，即可在手機看到日記。</p>
+    ${hasLocalVault ? '<p class="muted-copy" style="margin:0 0 12px">還原後會以雲端內容覆蓋本機日記。</p>' : ""}
     <form id="restore-form">
       <div class="field">
         <label for="restore-password">解鎖密碼</label>
@@ -567,11 +585,8 @@ function renderRestoreForm(): string {
 }
 
 function renderUnlockForm(): string {
-  const sync = state.syncSettings;
-  const syncHint = sync.enabled
-    ? "解鎖後會自動與雲端同步。"
-    : "要在手機看到電腦的日記，請到設定開啟雲端同步，或使用「從雲端還原」。";
   return `
+    ${renderAuthTabs("unlock", true)}
     <div class="auth-brand">${renderBrand().trim()}</div>
     <p style="margin-top:-8px">輸入密碼，回到你的角落。</p>
     <form id="unlock-form">
@@ -583,7 +598,7 @@ function renderUnlockForm(): string {
       <button class="btn btn-primary btn-block" type="submit">解鎖</button>
     </form>
     <div class="security-note">
-      ${syncHint} 內容以 AES-256 加密儲存。
+      看不到電腦的日記？請改按上方「雲端還原」。已啟用同步時，解鎖後會自動備份與同步。
     </div>
   `;
 }
@@ -620,55 +635,45 @@ async function restoreVaultFromCloud(
   showToast(`已還原 ${data.entries.length} 則記錄`);
 }
 
-function bindAuthEvents(exists: boolean): void {
+function bindAuthEvents(hasLocalVault: boolean): void {
   const card = document.getElementById("auth-card")!;
-
-  if (exists) {
-    const errorEl = document.getElementById("auth-error")!;
-    document.getElementById("unlock-form")!.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      errorEl.textContent = "";
-      const password = (document.getElementById("unlock-password") as HTMLInputElement).value;
-      const buffer = await loadVault();
-      if (!buffer) {
-        errorEl.textContent = "找不到資料，請重新建立。";
-        return;
-      }
-      try {
-        const { entries, todos, events, salt, updatedAt } = await decryptVault(password, buffer);
-        state.unlocked = true;
-        state.password = password;
-        loadVaultIntoState({ entries, todos, events, salt, updatedAt });
-        touchActivity();
-        beginReminderLoop();
-        render();
-        if (state.syncSettings.enabled) {
-          void runCloudSync(false).then((result) => {
-            if (result === "pulled") {
-              showToast("已從雲端同步最新內容");
-              render();
-            }
-          });
-        }
-      } catch {
-        errorEl.textContent = "密碼錯誤，請再試一次。";
-      }
-    });
-    return;
-  }
 
   card.querySelectorAll("[data-auth-mode]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const mode = (btn as HTMLElement).dataset.authMode as "setup" | "restore";
-      card.innerHTML = mode === "restore" ? renderRestoreForm() : renderSetupForm();
-      bindAuthEvents(false);
+      const mode = (btn as HTMLElement).dataset.authMode as AuthTabMode;
+      switchAuthView(mode, hasLocalVault);
     });
   });
 
-  const errorEl = document.getElementById("auth-error")!;
+  const errorEl = document.getElementById("auth-error");
+
+  document.getElementById("unlock-form")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!errorEl) return;
+    errorEl.textContent = "";
+    const password = (document.getElementById("unlock-password") as HTMLInputElement).value;
+    const buffer = await loadVault();
+    if (!buffer) {
+      errorEl.textContent = "找不到資料，請改用雲端還原。";
+      return;
+    }
+    try {
+      const { entries, todos, events, salt, updatedAt } = await decryptVault(password, buffer);
+      state.unlocked = true;
+      state.password = password;
+      loadVaultIntoState({ entries, todos, events, salt, updatedAt });
+      touchActivity();
+      beginReminderLoop();
+      render();
+      void runAutoCloudSync("unlock");
+    } catch {
+      errorEl.textContent = "密碼錯誤，請再試一次。";
+    }
+  });
 
   document.getElementById("restore-form")?.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (!errorEl) return;
     errorEl.textContent = "";
     const password = (document.getElementById("restore-password") as HTMLInputElement).value;
     const syncKey = (document.getElementById("restore-sync-key") as HTMLInputElement).value;
@@ -676,6 +681,9 @@ function bindAuthEvents(exists: boolean): void {
     const rememberSyncKey = (document.getElementById("restore-remember-key") as HTMLInputElement).checked;
     if (!syncKey.trim()) {
       errorEl.textContent = "請輸入同步金鑰。";
+      return;
+    }
+    if (hasLocalVault && !confirm("雲端還原會覆蓋手機上的本機日記，確定繼續？")) {
       return;
     }
     try {
@@ -687,9 +695,11 @@ function bindAuthEvents(exists: boolean): void {
 
   document.getElementById("setup-form")?.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (!errorEl) return;
     errorEl.textContent = "";
     const password = (document.getElementById("setup-password") as HTMLInputElement).value;
     const confirm = (document.getElementById("setup-confirm") as HTMLInputElement).value;
+    const syncKey = (document.getElementById("setup-sync-key") as HTMLInputElement).value.trim();
     if (password.length < 6) {
       errorEl.textContent = "密碼至少需要 6 個字元。";
       return;
@@ -708,9 +718,35 @@ function bindAuthEvents(exists: boolean): void {
     state.unlocked = true;
     state.password = password;
     loadVaultIntoState(data);
+    if (syncKey) {
+      saveSyncSettings({
+        enabled: true,
+        apiUrl: DEFAULT_SYNC_API_URL,
+        syncKey,
+        rememberSyncKey: true,
+        autoSync: true,
+      });
+      state.syncSettings = loadSyncSettings();
+      try {
+        await runCloudSync(false);
+        showToast("已建立保險庫並上傳至雲端");
+      } catch (err) {
+        showToast(`本機已建立，雲端上傳失敗：${String(err)}`);
+      }
+    }
     touchActivity();
     beginReminderLoop();
     render();
+  });
+}
+
+function runAutoCloudSync(reason: "unlock" | "foreground" | "save"): void {
+  if (!state.syncSettings.enabled || !state.syncSettings.syncKey) return;
+  void runCloudSync(false).then((result) => {
+    if (result === "pulled") {
+      showToast(reason === "foreground" ? "已同步雲端最新內容" : "已從雲端同步最新內容");
+      if (state.view === "journal" || state.view === "calendar" || state.view === "todos") render();
+    }
   });
 }
 
@@ -1194,17 +1230,16 @@ function renderSettings(): string {
         </section>
 
         <section class="entry-card">
-          <h3>雲端同步（手機／電腦）</h3>
-          <p>資料預設只存在<strong>本機瀏覽器</strong>。要跨裝置看到相同內容，請開啟雲端同步（上傳的仍是加密資料）。</p>
+          <h3>雲端備份與同步</h3>
+          <p>啟用後會<strong>自動</strong>在寫入、解鎖、回到 App 時備份到雲端（仍是加密資料）。手機與電腦需使用相同同步金鑰。</p>
           <ol class="sync-steps">
-            <li>在<strong>電腦</strong>：下方勾選啟用、設定同步金鑰 → 儲存 → 按「立即同步」</li>
-            <li>在<strong>手機</strong>：首次請選「從雲端還原」，或在此填入相同金鑰後按「立即同步」</li>
-            <li>解鎖密碼與同步金鑰需與電腦<strong>完全相同</strong></li>
+            <li>在<strong>電腦</strong>：勾選啟用、設定同步金鑰 → 儲存（會自動上傳）</li>
+            <li>在<strong>手機</strong>：登入頁選「雲端還原」，或在此填入相同金鑰後儲存</li>
           </ol>
           <form id="sync-form" style="margin-top:12px;">
             <label style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
               <input type="checkbox" id="sync-enabled" ${sync.enabled ? "checked" : ""} />
-              啟用雲端同步
+              啟用雲端備份與自動同步
             </label>
             <div class="field">
               <label for="sync-api-url">同步 API 網址</label>
@@ -1212,21 +1247,18 @@ function renderSettings(): string {
             </div>
             <div class="field">
               <label for="sync-key">同步金鑰</label>
-              <input id="sync-key" ${IOS_MASKED_INPUT} placeholder="自訂一組同步用金鑰（可含英文）" value="${escapeHtml(sync.syncKey)}" />
+              <input id="sync-key" ${IOS_MASKED_INPUT} placeholder="所有裝置使用同一組（可含英文）" value="${escapeHtml(sync.syncKey)}" />
             </div>
             <label style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
               <input type="checkbox" id="sync-remember" ${sync.rememberSyncKey ? "checked" : ""} />
-              記住同步金鑰（方便手機使用，但安全性較低）
+              記住同步金鑰（建議開啟，才能自動同步）
             </label>
-            <label style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
-              <input type="checkbox" id="sync-auto" ${sync.autoSync ? "checked" : ""} />
-              儲存時自動同步
-            </label>
+            <input type="hidden" id="sync-auto" value="1" />
             <p class="error-text" id="sync-error"></p>
             <div class="editor-actions">
               <button class="btn btn-secondary" type="button" id="btn-test-sync">測試連線</button>
               <button class="btn btn-secondary" type="button" id="btn-sync-now">立即同步</button>
-              <button class="btn btn-primary" type="submit">儲存同步設定</button>
+              <button class="btn btn-primary" type="submit">儲存並同步</button>
             </div>
             <p class="sync-status ${syncStatusClass}">${syncStatusText}</p>
           </form>
@@ -1809,7 +1841,7 @@ function bindSettingsEvents(): void {
         DEFAULT_SYNC_API_URL,
       syncKey: (document.getElementById("sync-key") as HTMLInputElement).value,
       rememberSyncKey: (document.getElementById("sync-remember") as HTMLInputElement).checked,
-      autoSync: (document.getElementById("sync-auto") as HTMLInputElement).checked,
+      autoSync: true,
       lastSyncAt: state.syncSettings.lastSyncAt,
       lastSyncStatus: state.syncSettings.lastSyncStatus,
     };
@@ -1819,7 +1851,11 @@ function bindSettingsEvents(): void {
     }
     saveSyncSettings(settings);
     state.syncSettings = loadSyncSettings();
-    showToast("同步設定已儲存");
+    if (settings.enabled) {
+      void runCloudSync(true).then(() => render());
+    } else {
+      showToast("同步設定已儲存");
+    }
   });
 
   document.getElementById("btn-test-sync")!.addEventListener("click", async () => {
@@ -1846,10 +1882,13 @@ function bindSettingsEvents(): void {
     state.syncSettings = {
       ...state.syncSettings,
       enabled: true,
-      apiUrl: (document.getElementById("sync-api-url") as HTMLInputElement).value.trim(),
+      apiUrl:
+        (document.getElementById("sync-api-url") as HTMLInputElement).value.trim() ||
+        DEFAULT_SYNC_API_URL,
       syncKey: (document.getElementById("sync-key") as HTMLInputElement).value,
-      autoSync: (document.getElementById("sync-auto") as HTMLInputElement).checked,
+      autoSync: true,
     };
+    saveSyncSettings(state.syncSettings);
     void runCloudSync(true).then(() => render());
   });
 
@@ -1958,9 +1997,14 @@ function escapeHtml(text: string): string {
 });
 
 document.addEventListener("visibilitychange", () => {
-  if (!state.unlocked || !document.hidden) return;
-  if (loadReaderPreferences().autoPrivacyShield) {
-    showPrivacyShield();
+  if (document.hidden) {
+    if (state.unlocked && loadReaderPreferences().autoPrivacyShield) {
+      showPrivacyShield();
+    }
+    return;
+  }
+  if (state.unlocked) {
+    runAutoCloudSync("foreground");
   }
 });
 

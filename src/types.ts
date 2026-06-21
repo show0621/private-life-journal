@@ -218,7 +218,7 @@ export const DEFAULT_SYNC_SETTINGS: SyncSettings = {
 
   syncKey: "",
 
-  rememberSyncKey: false,
+  rememberSyncKey: true,
 
   autoSync: true,
 
