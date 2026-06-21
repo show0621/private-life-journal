@@ -1,4 +1,5 @@
 import type { CompanionState } from "../types";
+import { renderCompanionPortrait } from "./portraits";
 import { RO_ADVENTURER_SPRITES, RO_COLORS } from "./ro-sprites";
 
 export const SPRITE_COLORS: Record<string, string> = {
@@ -142,7 +143,10 @@ export function renderCompanionSprite(
   c: CompanionState,
   extraClass = "",
   pose: SpritePose = "idle",
-  walkFrame = 0
+  walkFrame = 0,
+  walkDir = 1
 ): string {
+  const portrait = renderCompanionPortrait(c, extraClass, pose, walkDir);
+  if (portrait) return portrait;
   return renderPixelSprite(resolveSpriteKey(c, pose, walkFrame), extraClass);
 }

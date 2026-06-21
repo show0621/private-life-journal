@@ -7,6 +7,7 @@ import {
   needsDigitalPathChoice,
   STAGE_LABELS,
 } from "./game";
+import { renderAdventurerPickPortrait } from "./portraits";
 import { renderCompanionSprite, renderPixelSprite } from "./sprites";
 
 export type WalkerPlacement = "footer" | "editor";
@@ -14,15 +15,17 @@ export type WalkerPlacement = "footer" | "editor";
 let walkTimer: ReturnType<typeof setInterval> | undefined;
 let walkEl: HTMLButtonElement | null = null;
 let walkFrame = 0;
+let walkDirRef = 1;
 let companionRef: CompanionState | null = null;
 let onTapRef: (() => void) | null = null;
 let placementRef: WalkerPlacement = "footer";
 
-function updateWalkerSprite(pose: "idle" | "walk" | "attack" = "walk"): void {
+function updateWalkerSprite(pose: "idle" | "walk" | "attack" = "walk", dir = walkDirRef): void {
   if (!walkEl || !companionRef) return;
   const holder = walkEl.querySelector(".walker-sprite-wrap");
   if (!holder) return;
-  holder.innerHTML = renderCompanionSprite(companionRef, "walker-sprite", pose, walkFrame);
+  holder.innerHTML = renderCompanionSprite(companionRef, "walker-sprite", pose, walkFrame, dir);
+  (holder as HTMLElement).style.setProperty("--walk-dir", String(dir));
 }
 
 export function mountCompanionWalker(
@@ -60,15 +63,14 @@ export function mountCompanionWalker(
     const max = placement === "editor" ? Math.min(window.innerHeight * 0.35, 220) : Math.min(window.innerWidth - 80, 280);
     const min = placement === "editor" ? 8 : 8;
     if (pos <= min || pos >= max) dir *= -1;
+    walkDirRef = dir;
 
     if (placement === "editor") {
       walkEl.style.setProperty("--walk-y", `${pos}px`);
-      walkEl.style.setProperty("--walk-dir", "1");
     } else {
       walkEl.style.setProperty("--walk-x", `${pos}px`);
-      walkEl.style.setProperty("--walk-dir", dir === 1 ? "1" : "-1");
     }
-    updateWalkerSprite("walk");
+    updateWalkerSprite("walk", dir);
   }, 140);
 }
 
@@ -123,7 +125,7 @@ export function renderCompanionScreen(c: CompanionState): string {
                 .map(
                   (cls) => `
                 <button type="button" class="companion-pick-btn" data-start-adv="${cls}">
-                  ${renderPixelSprite(`adv-${cls}-1`, "pick-sprite")}
+                  ${renderAdventurerPickPortrait(cls)}
                   <span>${ADVENTURER_LABELS[cls]}</span>
                 </button>`
                 )
