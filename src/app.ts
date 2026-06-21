@@ -178,6 +178,15 @@ function deleteEntry(id: string): void {
   schedulePersist();
 }
 
+function renderBrand(compact = false): string {
+  return `
+    <div class="brand">
+      <p class="brand-mark">The Hideaway</p>
+      <p class="brand-tagline">${compact ? "journal" : "A quiet place for your words"}</p>
+    </div>
+  `;
+}
+
 function badgeClass(type: EntryType): string {
   if (type === "diary") return "badge badge-diary";
   if (type === "note") return "badge badge-note";
@@ -300,9 +309,9 @@ async function setupAuth(): Promise<void> {
 
 function renderSetupForm(): string {
   return `
-    <div class="auth-logo">🔒</div>
-    <h1>建立你的私密空間</h1>
-    <p>設定自訂密碼。所有內容會在裝置上加密，只有你知道密碼。</p>
+    <div class="auth-brand">${renderBrand().trim()}</div>
+    <h1>Welcome in</h1>
+    <p>設定你的密碼。文字只留在這裡，由你加密保管。</p>
     <form id="setup-form">
       <div class="field">
         <label for="setup-password">密碼</label>
@@ -323,9 +332,8 @@ function renderSetupForm(): string {
 
 function renderUnlockForm(): string {
   return `
-    <div class="auth-logo">🔒</div>
-    <h1>生活筆記</h1>
-    <p>輸入密碼解鎖你的日記、筆記與隨手記。</p>
+    <div class="auth-brand">${renderBrand().trim()}</div>
+    <p style="margin-top:-8px">輸入密碼，回到你的角落。</p>
     <form id="unlock-form">
       <div class="field">
         <label for="unlock-password">密碼</label>
@@ -409,7 +417,7 @@ function renderList(): string {
   return `
     <div class="screen">
       <header class="app-header">
-        <h1>生活筆記</h1>
+        ${renderBrand(true)}
         <div class="header-actions">
           <button class="icon-btn ${state.showHidden ? "active" : ""}" id="btn-hidden" title="顯示隱藏項目">🙈</button>
           <button class="icon-btn" id="btn-theme" title="切換主題">${getResolvedTheme() === "light" ? "🌙" : "☀️"}</button>
@@ -439,7 +447,7 @@ function renderList(): string {
       <div class="entry-list" id="entry-list">
         ${
           entries.length === 0
-            ? `<div class="empty-state"><p>還沒有任何記錄</p><p>點右下角 + 開始寫吧</p></div>`
+            ? `<div class="empty-state"><p>這裡還是空的</p><p>點右下角的 ＋ 寫下第一篇吧</p></div>`
             : entries.map(renderEntryCard).join("")
         }
       </div>
@@ -559,7 +567,9 @@ function renderSettings(): string {
     <div class="screen">
       <header class="app-header">
         <button class="btn btn-secondary" id="btn-back-settings">返回</button>
-        <h1>設定</h1>
+        <div class="brand" style="text-align:center">
+          <p class="brand-mark" style="font-size:1.2rem">Settings</p>
+        </div>
         <span style="width:72px"></span>
       </header>
 
@@ -981,7 +991,7 @@ function bindSettingsEvents(): void {
       state.vaultUpdatedAt
     );
     const stamp = new Date().toISOString().slice(0, 10);
-    downloadJson(`生活筆記備份-${stamp}.json`, backup);
+    downloadJson(`hideaway-backup-${stamp}.json`, backup);
     showToast("備份已下載");
   });
 

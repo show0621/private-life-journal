@@ -27,12 +27,12 @@ export const SIZE_OPTIONS = [
 
 export const COLOR_OPTIONS = [
   { label: "預設", value: "" },
-  { label: "紫", value: "#7256a0" },
-  { label: "粉", value: "#c45c8a" },
-  { label: "藍", value: "#2d7aaf" },
-  { label: "綠", value: "#3a8f5c" },
-  { label: "橘", value: "#c07a2a" },
-  { label: "灰", value: "#6d6280" },
+  { label: "墨", value: "#2c2825" },
+  { label: "褐", value: "#6b5344" },
+  { label: "綠", value: "#5c6b4f" },
+  { label: "藍", value: "#4a6670" },
+  { label: "赭", value: "#a66b4a" },
+  { label: "灰", value: "#8a8278" },
 ];
 
 export function renderRichToolbar(): string {
